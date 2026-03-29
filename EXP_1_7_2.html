@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_7_2_shared_scale.html</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+body {font-family: Arial; background:white; margin:0;}
+.container {display:flex; justify-content:center;}
+.plot {width:520px; height:520px;}
+h2 {text-align:center;}
+.controls {text-align:center; padding:10px;}
+</style>
+</head>
+
+<body>
+
+<h2>Electric Field Magnitude Comparison</h2>
+
+<div class="controls">
+Number of charges (N):
+<input type="range" id="Nslider" min="2" max="80" value="32" step="1">
+<span id="Nvalue">32</span>
+<button onclick="compute()">Update</button>
+</div>
+
+<div class="container">
+<div id="ringPlot" class="plot"></div>
+<div id="pointPlot" class="plot"></div>
+</div>
+
+<script>
+
+const q = 1e-6;
+const a = 1.0;
+const k = 8.9875517923e9;
+
+const nx = 90;
+const ny = 90;
+const xlim = 3;
+
+let x = [];
+let y = [];
+
+for(let i=0;i<nx;i++){
+x.push(-xlim + 2*xlim*i/(nx-1));
+y.push(-xlim + 2*xlim*i/(ny-1));
+}
+
+const slider = document.getElementById("Nslider");
+const label = document.getElementById("Nvalue");
+
+slider.oninput = function(){
+label.innerText = this.value;
+}
+
+function compute(){
+
+const N = parseInt(slider.value);
+
+// ring charges
+let charges = [];
+for(let i=0;i<N;i++){
+let theta = 2*Math.PI*i/N;
+charges.push([a*Math.cos(theta), a*Math.sin(theta)]);
+}
+
+function fieldRing(x,y){
+
+let Ex=0,Ey=0;
+
+for(let c of charges){
+
+let dx = x-c[0];
+let dy = y-c[1];
+
+let r2 = dx*dx + dy*dy + 1e-12;
+let r3 = r2*Math.sqrt(r2);
+
+Ex += k*q*dx/r3;
+Ey += k*q*dy/r3;
+
+}
+
+return Math.sqrt(Ex*Ex + Ey*Ey);
+}
+
+function fieldPoint(x,y){
+
+let r = Math.sqrt(x*x+y*y)+1e-12;
+return k*(N*q)/(r*r);
+}
+
+let Zring=[];
+let Zpoint=[];
+
+for(let j=0;j<ny;j++){
+
+let row1=[];
+let row2=[];
+
+for(let i=0;i<nx;i++){
+
+let xx=x[i];
+let yy=y[j];
+let r=Math.sqrt(xx*xx+yy*yy);
+
+if(r<a){
+row1.push(null);
+row2.push(null);
+}else{
+
+row1.push(Math.log10(fieldRing(xx,yy)));
+row2.push(Math.log10(fieldPoint(xx,yy)));
+
+}
+
+}
+
+Zring.push(row1);
+Zpoint.push(row2);
+
+}
+
+// compute shared min/max
+let allValues = [];
+for(let row of Zring){
+for(let v of row){
+if(v !== null && !isNaN(v)) allValues.push(v);
+}
+}
+for(let row of Zpoint){
+for(let v of row){
+if(v !== null && !isNaN(v)) allValues.push(v);
+}
+}
+
+let zmin = Math.min(...allValues);
+let zmax = Math.max(...allValues);
+
+Plotly.newPlot('ringPlot',[{
+z:Zring,
+x:x,
+y:y,
+type:'contour',
+colorscale:'Viridis',
+zmin:zmin,
+zmax:zmax,
+contours:{showlines:false},
+colorbar:{title:"log10|E|"}
+}],
+{
+title:"Ring of Charges (N = " + N + ")",
+xaxis:{scaleanchor:"y"},
+yaxis:{}
+});
+
+Plotly.newPlot('pointPlot',[{
+z:Zpoint,
+x:x,
+y:y,
+type:'contour',
+colorscale:'Viridis',
+zmin:zmin,
+zmax:zmax,
+contours:{showlines:false},
+showscale:false
+}],
+{
+title:"Equivalent Point Charge (Q = Nq)",
+xaxis:{scaleanchor:"y"},
+yaxis:{}
+});
+
+}
+
+compute();
+
+</script>
+
+</body>
+</html>

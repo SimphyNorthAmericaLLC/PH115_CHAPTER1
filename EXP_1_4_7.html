@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_4_7.html</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body { background:#1e1e1e; color:white; font-family:monospace; padding:15px; }
+.editor { display:flex; border:1px solid #444; height:420px; }
+#lineNumbers { background:#111; color:#00ff00; padding:10px 8px; text-align:right; overflow:hidden; white-space:pre; }
+#code { flex:1; background:#111; color:white; border:none; padding:10px; resize:none; overflow:auto; white-space:pre; }
+button { margin-top:10px; margin-right:6px; padding:8px 14px; background:#007acc; color:white; border:none; cursor:pointer; }
+#output { background:#111; padding:10px; margin-top:10px; min-height:120px; white-space:pre-wrap; }
+#plot { margin-top:15px; background:white; padding:10px; border-radius:8px; }
+#plotButtons { margin-top:10px; display:none; }
+</style>
+</head>
+
+<body>
+<h3>EXP_1_4_7.html</h3>
+
+<div class="editor">
+<pre id="lineNumbers"></pre>
+<textarea id="code" wrap="off">import numpy as np
+import matplotlib.pyplot as plt
+
+g = 9.81
+theta = np.deg2rad(30)
+k = 8.988e9
+q = 1e-4
+m1 = 1.0
+m2 = 1.0
+
+def derivatives(t, X):
+    x1, v1, x2, v2 = X
+    dv1dt = g*np.sin(theta) - k*q**2/(m1*(x2-x1)**2)
+    dv2dt = g*np.sin(theta) + k*q**2/(m2*(x2-x1)**2)
+    return np.array([v1, dv1dt, v2, dv2dt])
+
+initial_distance = 0.65
+X = np.array([0.0, 0.0, initial_distance, 0.0])
+
+t0, tf = 0, 5
+dt = 0.005
+N = int((tf - t0)/dt)
+
+t_vals = np.linspace(t0, tf, N)
+v1_vals = []
+v2_vals = []
+
+for t in t_vals:
+    v1_vals.append(X[1])
+    v2_vals.append(X[3])
+
+    k1 = derivatives(t, X)
+    k2 = derivatives(t + dt/2, X + dt*k1/2)
+    k3 = derivatives(t + dt/2, X + dt*k2/2)
+    k4 = derivatives(t + dt, X + dt*k3)
+
+    X = X + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+
+plt.figure(figsize=(9,5))
+plt.plot(t_vals, v1_vals, label="Speed of Box 1")
+plt.plot(t_vals, v2_vals, label="Speed of Box 2")
+plt.xlabel("Time (s)")
+plt.ylabel("Speed (m/s)")
+plt.title("Speed of Two Charged Boxes Over Time")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+
+print("RK4 integration complete.")
+</textarea>
+</div>
+
+<div>
+<button onclick="runCode()">Run</button>
+</div>
+
+<div id="plotButtons">
+<button onclick="downloadPlot('png')">Save PNG</button>
+<button onclick="downloadPlot('pdf')">Save PDF</button>
+<button onclick="downloadPlot('svg')">Save SVG</button>
+</div>
+
+<div id="output"></div>
+<div id="plot"></div>
+
+<script>
+let pyodideReady = loadPyodide();
+let pyodide = null;
+
+const codeEl = document.getElementById("code");
+const lineNumbers = document.getElementById("lineNumbers");
+const plotDiv = document.getElementById("plot");
+const outDiv = document.getElementById("output");
+const plotButtons = document.getElementById("plotButtons");
+
+function updateLineNumbers() {
+  const lines = codeEl.value.split("\n").length;
+  let nums = "";
+  for (let i=1;i<=lines;i++) nums += i + "\n";
+  lineNumbers.textContent = nums;
+}
+codeEl.addEventListener("input", updateLineNumbers);
+codeEl.addEventListener("scroll", () => lineNumbers.scrollTop = codeEl.scrollTop);
+updateLineNumbers();
+
+async function runCode() {
+  pyodide = await pyodideReady;
+  outDiv.innerText = "Running...";
+  plotDiv.innerHTML = "";
+  plotButtons.style.display = "none";
+
+  await pyodide.loadPackage(["numpy","matplotlib"]);
+
+  try {
+    await pyodide.runPythonAsync(`
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+plt.rcParams.update({'figure.facecolor':'white','axes.facecolor':'white'})
+import sys, io, base64
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+    await pyodide.runPythonAsync(codeEl.value);
+
+    await pyodide.runPythonAsync(`
+plt.savefig("plot.png")
+plt.savefig("plot.pdf")
+plt.savefig("plot.svg")
+buf = io.BytesIO()
+plt.savefig(buf, format="png")
+buf.seek(0)
+img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+print("__PLOT__" + img_base64)
+`);
+
+    let out = await pyodide.runPythonAsync("sys.stdout.getvalue()");
+
+    if (out.includes("__PLOT__")) {
+      const parts = out.split("__PLOT__");
+      outDiv.innerText = parts[0];
+      const img = document.createElement("img");
+      img.src = "data:image/png;base64," + parts[1];
+      img.style.maxWidth = "100%";
+      plotDiv.appendChild(img);
+      plotButtons.style.display = "block";
+    } else {
+      outDiv.innerText = out;
+    }
+
+  } catch (err) {
+    outDiv.innerText = err;
+  }
+}
+
+function downloadPlot(ext) {
+  try {
+    const data = pyodide.FS.readFile("plot." + ext, {encoding:"binary"});
+    let mime = "application/octet-stream";
+    if (ext === "png") mime = "image/png";
+    if (ext === "pdf") mime = "application/pdf";
+    if (ext === "svg") mime = "image/svg+xml";
+    const blob = new Blob([data], {type: mime});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "plot." + ext;
+    a.click();
+  } catch (e) {
+    alert("Run first.");
+  }
+}
+</script>
+
+</body>
+</html>

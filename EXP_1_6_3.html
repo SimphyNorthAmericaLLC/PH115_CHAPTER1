@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_6_3_PROB</title>
+
+<style>
+body {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    font-family: monospace;
+    margin: 0;
+}
+
+#container {
+    display: flex;
+    height: 100vh;
+}
+
+#lineNumbers {
+    width: 50px;
+    background-color: #0a0a0a;
+    color: #00ff88;
+    padding: 10px 5px;
+    text-align: right;
+    user-select: none;
+}
+
+#editor {
+    width: 50%;
+    background-color: #1e1e1e;
+    color: #ffffff;
+    padding: 10px;
+    overflow-y: scroll;
+    border-right: 2px solid #444;
+    outline: none;
+    white-space: pre;
+}
+
+#editorContainer {
+    display: flex;
+    width: 50%;
+}
+
+#output {
+    width: 50%;
+    padding: 10px;
+    background-color: #ffffff;
+}
+
+button {
+    margin: 5px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+</head>
+<body>
+
+<button id="runBtn">Run Code</button>
+<button id="savePNG">Save PNG</button>
+<button id="savePDF">Save PDF</button>
+
+<div id="container">
+<div id="editorContainer">
+<div id="lineNumbers"></div>
+<div id="editor" contenteditable="true"></div>
+</div>
+<div id="output"></div>
+</div>
+
+<script>
+
+let currentImageData = null;
+
+const initialCode = `import numpy as np
+import matplotlib.pyplot as plt
+
+k = 8.99e9
+q = 1e-6
+
+x = np.linspace(-1, 1, 200)
+y = np.linspace(-1, 1, 200)
+X, Y = np.meshgrid(x, y)
+
+x0, y0 = 0, 0
+
+R = np.sqrt((X-x0)**2 + (Y-y0)**2)
+R[R == 0] = 1e-6
+
+V = k * q / R
+
+Ex = k * q * (X-x0) / R**3
+Ey = k * q * (Y-y0) / R**3
+
+plt.figure(figsize=(6,5))
+
+contour = plt.contour(X, Y, V, levels=50, cmap='viridis')
+plt.colorbar(contour)
+
+plt.streamplot(X, Y, Ex, Ey, color='r', density=2)
+
+plt.gca().set_aspect('equal')
+plt.savefig("plot.png")
+plt.savefig("plot.pdf")`;
+
+const editor = document.getElementById("editor");
+const lineNumbers = document.getElementById("lineNumbers");
+
+editor.innerText = initialCode;
+
+function updateLineNumbers() {
+    const lines = editor.innerText.split("\n").length;
+    let nums = "";
+    for (let i = 1; i <= lines; i++) {
+        nums += i + "\n";
+    }
+    lineNumbers.innerText = nums;
+}
+
+editor.addEventListener("input", updateLineNumbers);
+updateLineNumbers();
+
+let pyodideReady = loadPyodide();
+
+document.getElementById("runBtn").addEventListener("click", async () => {
+    let pyodide = await pyodideReady;
+
+    await pyodide.loadPackage(["numpy", "matplotlib"]);
+
+    const code = editor.innerText;
+
+    try {
+        await pyodide.runPythonAsync(`
+import matplotlib
+matplotlib.use('Agg')
+` + code);
+
+        let img = pyodide.FS.readFile("plot.png", { encoding: "binary" });
+        currentImageData = img;
+
+        let blob = new Blob([img], { type: "image/png" });
+        let url = URL.createObjectURL(blob);
+
+        document.getElementById("output").innerHTML = `<img src="${url}" width="100%">`;
+
+    } catch(err) {
+        document.getElementById("output").innerText = err;
+    }
+});
+
+document.getElementById("savePNG").addEventListener("click", () => {
+    if (!currentImageData) return;
+    let blob = new Blob([currentImageData], { type: "image/png" });
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "plot.png";
+    a.click();
+});
+
+document.getElementById("savePDF").addEventListener("click", async () => {
+    let pyodide = await pyodideReady;
+    try {
+        let pdf = pyodide.FS.readFile("plot.pdf", { encoding: "binary" });
+        let blob = new Blob([pdf], { type: "application/pdf" });
+        let a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "plot.pdf";
+        a.click();
+    } catch(e) {
+        alert("Run the code first to generate PDF.");
+    }
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,166 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_7_6_widget.html</title>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body { background:#1e1e1e; color:white; font-family:monospace; padding:15px; }
+.editor { display:flex; border:1px solid #444; height:360px; }
+#lineNumbers {
+  background:#111; color:#00ff00; padding:10px 8px;
+  text-align:right; overflow:hidden; white-space:pre;
+}
+#code {
+  flex:1; background:#111; color:white; border:none;
+  padding:10px; resize:none; overflow:auto; white-space:pre;
+}
+button {
+  margin-top:10px; margin-right:6px;
+  padding:8px 14px; background:#007acc;
+  color:white; border:none; cursor:pointer;
+}
+#output {
+  background:#111; padding:10px; margin-top:10px;
+  min-height:80px; white-space:pre-wrap;
+}
+#viz {
+  background:white;
+  margin-top:15px;
+  border-radius:6px;
+}
+</style>
+</head>
+
+<body>
+
+<h3>Force on Charge Near Line of Charges</h3>
+
+<div class="editor">
+<pre id="lineNumbers"></pre>
+<textarea id="code" wrap="off">
+import numpy as np
+
+epsilon_0 = 8.854187817e-12
+
+charge = 5e-6
+distance_from_line = 0.255
+line_length = 8.6
+num_charges = 32
+charge_magnitude = 5e-6
+
+linear_charge_density = num_charges * charge_magnitude / line_length
+
+electric_field = linear_charge_density / (2 * np.pi * epsilon_0 * distance_from_line)
+
+force = charge * electric_field
+
+print(f"The force exerted on the charge is {force:.2e} N")
+
+print("VIS_DATA", distance_from_line, line_length, num_charges)
+</textarea>
+</div>
+
+<button onclick="runCode()">Run</button>
+
+<div id="output"></div>
+
+<canvas id="viz" width="600" height="250"></canvas>
+
+<script>
+
+let pyodideReady = loadPyodide();
+let pyodide = null;
+
+const codeEl = document.getElementById("code");
+const lineNumbers = document.getElementById("lineNumbers");
+const outDiv = document.getElementById("output");
+
+function updateLineNumbers() {
+  const lines = codeEl.value.split("\n").length;
+  let nums = "";
+  for (let i=1;i<=lines;i++) nums += i + "\n";
+  lineNumbers.textContent = nums;
+}
+codeEl.addEventListener("input", updateLineNumbers);
+codeEl.addEventListener("scroll", () => lineNumbers.scrollTop = codeEl.scrollTop);
+updateLineNumbers();
+
+async function runCode(){
+
+  pyodide = await pyodideReady;
+
+  await pyodide.loadPackage(["numpy"]);
+
+  try{
+
+    await pyodide.runPythonAsync(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+    await pyodide.runPythonAsync(codeEl.value);
+
+    let out = await pyodide.runPythonAsync("sys.stdout.getvalue()");
+    outDiv.innerText = out;
+
+    // parse visualization data
+    let parts = out.split("VIS_DATA");
+    if(parts.length>1){
+        let nums = parts[1].trim().split(" ");
+        draw(parseFloat(nums[0]), parseFloat(nums[1]), parseInt(nums[2]));
+    }
+
+  }catch(err){
+    outDiv.innerText = err;
+  }
+}
+
+function draw(distance, length, N){
+
+  const canvas = document.getElementById("viz");
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const centerY = canvas.height/2;
+  const scale = canvas.width/(length*1.2);
+
+  // draw line
+  ctx.strokeStyle="black";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width/2 - length*scale/2, centerY);
+  ctx.lineTo(canvas.width/2 + length*scale/2, centerY);
+  ctx.stroke();
+
+  // draw charges
+  for(let i=0;i<N;i++){
+      let x = canvas.width/2 - length*scale/2 + i*(length*scale/(N-1));
+      ctx.fillStyle="red";
+      ctx.beginPath();
+      ctx.arc(x, centerY, 4, 0, Math.PI*2);
+      ctx.fill();
+  }
+
+  // test charge
+  ctx.fillStyle="blue";
+  ctx.beginPath();
+  ctx.arc(canvas.width/2, centerY - distance*scale, 6, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle="black";
+  ctx.fillText("test charge", canvas.width/2+10, centerY-distance*scale);
+
+}
+
+runCode();
+
+</script>
+
+</body>
+</html>

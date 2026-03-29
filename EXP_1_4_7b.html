@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_4_7b.html</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body { background:#1e1e1e; color:white; font-family:monospace; padding:15px; }
+.editor { display:flex; border:1px solid #444; height:420px; }
+#lineNumbers { background:#111; color:#00ff00; padding:10px 8px; text-align:right; overflow:hidden; white-space:pre; }
+#code { flex:1; background:#111; color:white; border:none; padding:10px; resize:none; overflow:auto; white-space:pre; }
+button { margin-top:10px; margin-right:6px; padding:8px 14px; background:#007acc; color:white; border:none; cursor:pointer; }
+#output { background:#111; padding:10px; margin-top:10px; min-height:120px; white-space:pre-wrap; }
+#plot { margin-top:15px; background:white; padding:10px; border-radius:8px; }
+#plotButtons { margin-top:10px; display:none; }
+</style>
+</head>
+
+<body>
+<h3>EXP_1_4_7b.html (Euler Method)</h3>
+
+<div class="editor">
+<pre id="lineNumbers"></pre>
+<textarea id="code" wrap="off">import numpy as np
+import matplotlib.pyplot as plt
+
+g = 9.81
+theta = np.deg2rad(30)
+k = 8.988e9
+q = 1e-4
+m1 = 1.0
+m2 = 1.0
+initial_distance = 0.65
+
+dt = 0.01
+t_final = 5.0
+n_steps = int(t_final / dt)
+
+x1 = 0.0
+x2 = initial_distance
+v1 = 0.0
+v2 = 0.0
+
+times = np.zeros(n_steps)
+v1_values = np.zeros(n_steps)
+v2_values = np.zeros(n_steps)
+
+for i in range(n_steps):
+    r = x2 - x1
+    force_electric = k * q**2 / r**2
+
+    a1 = g * np.sin(theta) - force_electric / m1
+    a2 = g * np.sin(theta) + force_electric / m2
+
+    v1 += a1 * dt
+    v2 += a2 * dt
+
+    x1 += v1 * dt
+    x2 += v2 * dt
+
+    v1_values[i] = v1
+    v2_values[i] = v2
+    times[i] = i * dt
+
+plt.figure(figsize=(9,5))
+plt.plot(times, v1_values, label="Speed of Box 1")
+plt.plot(times, v2_values, label="Speed of Box 2")
+plt.xlabel("Time (s)")
+plt.ylabel("Speed (m/s)")
+plt.title("Speed of Two Charged Boxes Over Time (Euler Method)")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+
+print("Euler integration complete.")
+</textarea>
+</div>
+
+<div>
+<button onclick="runCode()">Run</button>
+</div>
+
+<div id="plotButtons">
+<button onclick="downloadPlot('png')">Save PNG</button>
+<button onclick="downloadPlot('pdf')">Save PDF</button>
+<button onclick="downloadPlot('svg')">Save SVG</button>
+</div>
+
+<div id="output"></div>
+<div id="plot"></div>
+
+<script>
+let pyodideReady = loadPyodide();
+let pyodide = null;
+
+const codeEl = document.getElementById("code");
+const lineNumbers = document.getElementById("lineNumbers");
+const plotDiv = document.getElementById("plot");
+const outDiv = document.getElementById("output");
+const plotButtons = document.getElementById("plotButtons");
+
+function updateLineNumbers() {
+  const lines = codeEl.value.split("\n").length;
+  let nums = "";
+  for (let i=1;i<=lines;i++) nums += i + "\n";
+  lineNumbers.textContent = nums;
+}
+codeEl.addEventListener("input", updateLineNumbers);
+codeEl.addEventListener("scroll", () => lineNumbers.scrollTop = codeEl.scrollTop);
+updateLineNumbers();
+
+async function runCode() {
+  pyodide = await pyodideReady;
+  outDiv.innerText = "Running...";
+  plotDiv.innerHTML = "";
+  plotButtons.style.display = "none";
+
+  await pyodide.loadPackage(["numpy","matplotlib"]);
+
+  try {
+    await pyodide.runPythonAsync(`
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+plt.rcParams.update({'figure.facecolor':'white','axes.facecolor':'white'})
+import sys, io, base64
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+    await pyodide.runPythonAsync(codeEl.value);
+
+    await pyodide.runPythonAsync(`
+plt.savefig("plot.png")
+plt.savefig("plot.pdf")
+plt.savefig("plot.svg")
+buf = io.BytesIO()
+plt.savefig(buf, format="png")
+buf.seek(0)
+img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+print("__PLOT__" + img_base64)
+`);
+
+    let out = await pyodide.runPythonAsync("sys.stdout.getvalue()");
+
+    if (out.includes("__PLOT__")) {
+      const parts = out.split("__PLOT__");
+      outDiv.innerText = parts[0];
+      const img = document.createElement("img");
+      img.src = "data:image/png;base64," + parts[1];
+      img.style.maxWidth = "100%";
+      plotDiv.appendChild(img);
+      plotButtons.style.display = "block";
+    } else {
+      outDiv.innerText = out;
+    }
+
+  } catch (err) {
+    outDiv.innerText = err;
+  }
+}
+
+function downloadPlot(ext) {
+  try {
+    const data = pyodide.FS.readFile("plot." + ext, {encoding:"binary"});
+    let mime = "application/octet-stream";
+    if (ext === "png") mime = "image/png";
+    if (ext === "pdf") mime = "application/pdf";
+    if (ext === "svg") mime = "image/svg+xml";
+    const blob = new Blob([data], {type: mime});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "plot." + ext;
+    a.click();
+  } catch (e) {
+    alert("Run first.");
+  }
+}
+</script>
+
+</body>
+</html>

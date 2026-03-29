@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paschen Curve Widget</title>
+  <style>
+    :root {
+      --bg: #101418;
+      --panel: #182028;
+      --panel2: #1f2a35;
+      --text: #eef3f8;
+      --muted: #b6c3d1;
+      --accent: #57b1ff;
+      --border: #304150;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 18px; }
+    h1 { margin: 0 0 8px; font-size: 2rem; }
+    .subtitle { color: var(--muted); line-height: 1.45; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+    }
+    .control-group { margin-bottom: 14px; }
+    label { display: block; margin-bottom: 6px; font-size: 0.92rem; color: var(--muted); }
+    select, input, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+    button { cursor: pointer; font-weight: 700; }
+    button.primary { background: var(--accent); color: #08131d; border: none; }
+    .small { color: var(--muted); font-size: 0.84rem; line-height: 1.4; }
+    .formula {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 10px;
+      font-family: "Times New Roman", serif;
+      overflow-x: auto;
+      line-height: 1.4;
+    }
+    canvas {
+      width: 100%;
+      height: 560px;
+      display: block;
+      background: #ffffff;
+      border-radius: 12px;
+    }
+    .info { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .stat {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .k { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    .v { font-size: 1rem; font-weight: 700; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; color: var(--muted); font-size: 0.88rem; }
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 7px;
+      vertical-align: -1px;
+    }
+    .curve::before { background: #1f77b4; }
+    .minpt::before { background: #d62728; }
+    .hoverpt::before { background: #2ca02c; }
+    @media (max-width: 960px) {
+      .grid { grid-template-columns: 1fr; }
+      .info { grid-template-columns: 1fr; }
+      canvas { height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Interactive Paschen Curve Widget</h1>
+    <div class="subtitle">
+      Explore breakdown voltage versus the pressure-distance product using the classical Paschen-law form.
+      The gas presets are editable teaching/demo values, so you can replace A, B, and gamma with values from your preferred reference or lab notes.
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="control-group">
+          <label for="gasSelect">Gas preset</label>
+          <select id="gasSelect"></select>
+        </div>
+
+        <div class="row3 control-group">
+          <div>
+            <label for="Ainput">A [(kPa*cm)^-1]</label>
+            <input id="Ainput" type="number" step="0.1">
+          </div>
+          <div>
+            <label for="Binput">B [V/(kPa*cm)]</label>
+            <input id="Binput" type="number" step="0.1">
+          </div>
+          <div>
+            <label for="ginput">gamma_se</label>
+            <input id="ginput" type="number" step="0.001" min="0.0001">
+          </div>
+        </div>
+
+        <div class="row2 control-group">
+          <div>
+            <label for="xmin">Min p*d [kPa*cm]</label>
+            <input id="xmin" type="number" step="0.001" value="0.001">
+          </div>
+          <div>
+            <label for="xmax">Max p*d [kPa*cm]</label>
+            <input id="xmax" type="number" step="0.1" value="100">
+          </div>
+        </div>
+
+        <div class="row2 control-group">
+          <div>
+            <label for="npts">Plot points</label>
+            <input id="npts" type="number" step="1" min="200" max="3000" value="900">
+          </div>
+          <div>
+            <label for="ycap">Y max [V]</label>
+            <input id="ycap" type="number" step="10" min="100" value="3000">
+          </div>
+        </div>
+
+        <div class="buttons">
+          <button id="updateBtn" class="primary">Update Plot</button>
+          <button id="resetBtn">Reset Preset</button>
+          <button id="pngBtn">Save PNG</button>
+          <button id="csvBtn">Save CSV</button>
+        </div>
+
+        <div class="formula">
+          V_B = B(pd) / ( ln(Apd) - ln( ln(1 + 1/gamma_se) ) )
+        </div>
+
+        <p class="small">Valid only where the denominator is positive. The red point shows the classical Paschen minimum.</p>
+        <p class="small">Hover over the curve to read off p*d and breakdown voltage.</p>
+      </div>
+
+      <div class="card">
+        <canvas id="plotCanvas" width="900" height="560"></canvas>
+        <div class="legend">
+          <span class="curve">Paschen curve</span>
+          <span class="minpt">Paschen minimum</span>
+          <span class="hoverpt">Hover readout</span>
+        </div>
+        <div class="info">
+          <div class="stat"><div class="k">Current gas/preset</div><div class="v" id="statGas">Air</div></div>
+          <div class="stat"><div class="k">Minimum p*d</div><div class="v" id="statPd">--</div></div>
+          <div class="stat"><div class="k">Minimum breakdown voltage</div><div class="v" id="statVmin">--</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const presets = {
+  "Air":      { A: 112.5, B: 2737.5, gamma: 0.01 },
+  "Nitrogen": { A: 105.0, B: 3000.0, gamma: 0.01 },
+  "Argon":    { A: 103.0, B: 1126.0, gamma: 0.01 },
+  "Helium":   { A: 30.0,  B: 650.0,  gamma: 0.01 },
+  "Neon":     { A: 45.0,  B: 1200.0, gamma: 0.01 },
+  "Custom":   { A: 112.5, B: 2737.5, gamma: 0.01 }
+};
+
+const gasSelect = document.getElementById('gasSelect');
+const Ainput = document.getElementById('Ainput');
+const Binput = document.getElementById('Binput');
+const ginput = document.getElementById('ginput');
+const xminInput = document.getElementById('xmin');
+const xmaxInput = document.getElementById('xmax');
+const nptsInput = document.getElementById('npts');
+const ycapInput = document.getElementById('ycap');
+const statGas = document.getElementById('statGas');
+const statPd = document.getElementById('statPd');
+const statVmin = document.getElementById('statVmin');
+const canvas = document.getElementById('plotCanvas');
+const ctx = canvas.getContext('2d');
+
+let currentData = [];
+let hoverIndex = -1;
+let currentCurve = null;
+
+function populateSelect() {
+  Object.keys(presets).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    gasSelect.appendChild(opt);
+  });
+  gasSelect.value = 'Air';
+}
+
+function loadPreset(name) {
+  const p = presets[name];
+  Ainput.value = p.A;
+  Binput.value = p.B;
+  ginput.value = p.gamma;
+  update();
+}
+
+function log10(x) { return Math.log(x) / Math.LN10; }
+
+function computeCurve(A, B, gamma, xMin, xMax, nPts) {
+  const xs = [];
+  const ys = [];
+  const logMin = log10(xMin);
+  const logMax = log10(xMax);
+  const L = Math.log(1 + 1 / gamma);
+  for (let i = 0; i < nPts; i++) {
+    const f = i / (nPts - 1);
+    const pd = Math.pow(10, logMin + f * (logMax - logMin));
+    const denom = Math.log(A * pd) - Math.log(L);
+    if (isFinite(denom) && denom > 0) {
+      const V = B * pd / denom;
+      if (isFinite(V) && V > 0) {
+        xs.push(pd);
+        ys.push(V);
+      }
+    }
+  }
+  const pdMin = Math.E * L / A;
+  const VMin = B * pdMin;
+  return { xs, ys, pdMin, VMin };
+}
+
+function fmt(x, digits) {
+  if (!isFinite(x)) return '--';
+  const ax = Math.abs(x);
+  if (ax >= 1000 || (ax > 0 && ax < 0.01)) return x.toExponential(3);
+  return x.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  const w = Math.round(rect.width * ratio);
+  const h = Math.round(rect.height * ratio);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function update() {
+  const A = parseFloat(Ainput.value);
+  const B = parseFloat(Binput.value);
+  const gamma = parseFloat(ginput.value);
+  const xMin = parseFloat(xminInput.value);
+  const xMax = parseFloat(xmaxInput.value);
+  const nPts = Math.max(200, Math.min(3000, parseInt(nptsInput.value || '900', 10)));
+  if (!(A > 0 && B > 0 && gamma > 0 && xMin > 0 && xMax > xMin)) return;
+
+  currentCurve = computeCurve(A, B, gamma, xMin, xMax, nPts);
+  currentData = currentCurve.xs.map((x, i) => ({ x: x, y: currentCurve.ys[i] }));
+  statGas.textContent = gasSelect.value;
+  statPd.textContent = fmt(currentCurve.pdMin, 4) + ' kPa*cm';
+  statVmin.textContent = fmt(currentCurve.VMin, 1) + ' V';
+  draw();
+}
+
+function draw() {
+  resizeCanvas();
+  const width = canvas.getBoundingClientRect().width;
+  const height = canvas.getBoundingClientRect().height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  const margin = { left: 78, right: 20, top: 20, bottom: 62 };
+  const pw = width - margin.left - margin.right;
+  const ph = height - margin.top - margin.bottom;
+  const xMin = parseFloat(xminInput.value);
+  const xMax = parseFloat(xmaxInput.value);
+  const yMax = Math.max(100, parseFloat(ycapInput.value || '3000'));
+  const logXmin = log10(xMin);
+  const logXmax = log10(xMax);
+
+  function X(x) {
+    const t = (log10(x) - logXmin) / (logXmax - logXmin);
+    return margin.left + t * pw;
+  }
+  function Y(y) {
+    const t = y / yMax;
+    return margin.top + ph - t * ph;
+  }
+
+  ctx.strokeStyle = '#d5dbe3';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#334155';
+  ctx.font = '12px Arial';
+
+  const d0 = Math.ceil(logXmin);
+  const d1 = Math.floor(logXmax);
+  for (let d = d0; d <= d1; d++) {
+    const val = Math.pow(10, d);
+    const x = X(val);
+    ctx.beginPath();
+    ctx.moveTo(x, margin.top);
+    ctx.lineTo(x, margin.top + ph);
+    ctx.stroke();
+    ctx.fillText(val >= 1 ? String(val) : val.toExponential(0).replace('+', ''), x - 10, height - 36);
+  }
+
+  const nY = 6;
+  for (let i = 0; i <= nY; i++) {
+    const y = (i / nY) * yMax;
+    const py = Y(y);
+    ctx.beginPath();
+    ctx.moveTo(margin.left, py);
+    ctx.lineTo(margin.left + pw, py);
+    ctx.stroke();
+    ctx.fillText(fmt(y, 0), 18, py + 4);
+  }
+
+  ctx.strokeStyle = '#111827';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(margin.left, margin.top);
+  ctx.lineTo(margin.left, margin.top + ph);
+  ctx.lineTo(margin.left + pw, margin.top + ph);
+  ctx.stroke();
+
+  ctx.save();
+  ctx.fillStyle = '#111827';
+  ctx.font = '15px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Pressure * Distance, p*d  [kPa*cm]', margin.left + pw / 2, height - 14);
+  ctx.translate(22, margin.top + ph / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Breakdown Voltage, V_B [V]', 0, 0);
+  ctx.restore();
+
+  if (currentCurve && currentCurve.xs.length > 1) {
+    ctx.strokeStyle = '#1f77b4';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < currentCurve.xs.length; i++) {
+      const x = currentCurve.xs[i];
+      const y = currentCurve.ys[i];
+      if (y > yMax) continue;
+      const px = X(x);
+      const py = Y(y);
+      if (!started) {
+        ctx.moveTo(px, py);
+        started = true;
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.stroke();
+
+    if (currentCurve.pdMin > xMin && currentCurve.pdMin < xMax && currentCurve.VMin < yMax) {
+      const px = X(currentCurve.pdMin);
+      const py = Y(currentCurve.VMin);
+      ctx.fillStyle = '#d62728';
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = '#d62728';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, margin.top + ph);
+      ctx.moveTo(px, py);
+      ctx.lineTo(margin.left, py);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  if (hoverIndex >= 0 && hoverIndex < currentData.length) {
+    const p = currentData[hoverIndex];
+    const px = X(p.x);
+    const py = Y(Math.min(p.y, yMax));
+    ctx.fillStyle = '#2ca02c';
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, 2 * Math.PI);
+    ctx.fill();
+
+    const lines = ['p*d = ' + fmt(p.x, 4), 'V_B = ' + fmt(p.y, 1) + ' V'];
+    ctx.font = '13px Arial';
+    const tw = Math.max(ctx.measureText(lines[0]).width, ctx.measureText(lines[1]).width) + 18;
+    const th = 40;
+    let bx = px + 12;
+    let by = py - 52;
+    if (bx + tw > width - 10) bx = px - tw - 12;
+    if (by < 10) by = py + 12;
+
+    ctx.fillStyle = 'rgba(17,24,39,0.92)';
+    ctx.strokeStyle = '#2ca02c';
+    roundRect(ctx, bx, by, tw, th, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ecf3fb';
+    ctx.fillText(lines[0], bx + 9, by + 16);
+    ctx.fillText(lines[1], bx + 9, by + 32);
+  }
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!currentData.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const margin = { left: 78, right: 20 };
+  const pw = rect.width - margin.left - margin.right;
+  const xMin = parseFloat(xminInput.value);
+  const xMax = parseFloat(xmaxInput.value);
+  const logXmin = log10(xMin);
+  const logXmax = log10(xMax);
+
+  if (mx < margin.left || mx > rect.width - margin.right) {
+    hoverIndex = -1;
+    draw();
+    return;
+  }
+
+  const t = (mx - margin.left) / pw;
+  const targetX = Math.pow(10, logXmin + t * (logXmax - logXmin));
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < currentData.length; i++) {
+    const d = Math.abs(Math.log(currentData[i].x) - Math.log(targetX));
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  hoverIndex = best;
+  draw();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoverIndex = -1;
+  draw();
+});
+
+gasSelect.addEventListener('change', () => loadPreset(gasSelect.value));
+document.getElementById('updateBtn').addEventListener('click', update);
+document.getElementById('resetBtn').addEventListener('click', () => loadPreset(gasSelect.value));
+[Ainput, Binput, ginput, xminInput, xmaxInput, nptsInput, ycapInput].forEach(el => el.addEventListener('change', update));
+document.getElementById('pngBtn').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'paschen_curve.png';
+  a.click();
+});
+document.getElementById('csvBtn').addEventListener('click', () => {
+  let csv = 'pd_kPa_cm,breakdown_voltage_V\n';
+  currentData.forEach(p => { csv += p.x + ',' + p.y + '\n'; });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'paschen_curve_data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+window.addEventListener('resize', draw);
+
+populateSelect();
+loadPreset('Air');
+</script>
+</body>
+</html>

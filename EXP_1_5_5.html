@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_5_5.html</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body { background:#1e1e1e; color:white; font-family:monospace; padding:15px; }
+.editor { display:flex; border:1px solid #444; height:420px; }
+#lineNumbers {
+  background:#111; color:#00ff00; padding:10px 8px;
+  text-align:right; overflow:hidden; white-space:pre;
+}
+#code {
+  flex:1; background:#111; color:white; border:none;
+  padding:10px; resize:none; overflow:auto; white-space:pre;
+}
+button {
+  margin-top:10px; margin-right:6px;
+  padding:8px 14px; background:#007acc;
+  color:white; border:none; cursor:pointer;
+}
+#output {
+  background:#111; padding:10px; margin-top:10px;
+  min-height:120px; white-space:pre-wrap;
+}
+#plot { margin-top:15px; background:white; padding:10px; border-radius:8px; }
+#plotButtons { margin-top:10px; display:none; }
+</style>
+</head>
+
+<body>
+<h3>EXP_1_5_5.html (RK4)</h3>
+
+<div class="editor">
+<pre id="lineNumbers"></pre>
+<textarea id="code" wrap="off">import numpy as np
+import matplotlib.pyplot as plt
+
+def acceleration(x):
+    return 9 / x**2
+
+def derivatives(t, X):
+    x, v = X
+    return np.array([v, acceleration(x)])
+
+def find_time_for_distance(target_distance):
+    x = 5.0
+    v = -5.0
+    X = np.array([x, v])
+
+    t0, tf = 0.0, 10.0
+    dt = 0.001
+    N = int((tf - t0)/dt)
+
+    t_values = np.zeros(N)
+    x_values = np.zeros(N)
+
+    t = t0
+    for i in range(N):
+        t_values[i] = t
+        x_values[i] = X[0]
+
+        k1 = derivatives(t, X)
+        k2 = derivatives(t + dt/2, X + dt*k1/2)
+        k3 = derivatives(t + dt/2, X + dt*k2/2)
+        k4 = derivatives(t + dt, X + dt*k3)
+
+        X = X + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+        t += dt
+
+    index = np.abs(x_values - target_distance).argmin()
+    return t_values[index]
+
+target_distance = 0.64
+time_at_target_distance = find_time_for_distance(target_distance)
+
+print(f"Time when distance is approximately {target_distance}: {time_at_target_distance:.4f} seconds")
+</textarea>
+</div>
+
+<div>
+<button onclick="runCode()">Run</button>
+</div>
+
+<div id="plotButtons">
+<button onclick="downloadPlot('png')">Save PNG</button>
+<button onclick="downloadPlot('pdf')">Save PDF</button>
+<button onclick="downloadPlot('svg')">Save SVG</button>
+</div>
+
+<div id="output"></div>
+<div id="plot"></div>
+
+<script>
+let pyodideReady = loadPyodide();
+let pyodide = null;
+
+const codeEl = document.getElementById("code");
+const lineNumbers = document.getElementById("lineNumbers");
+const plotDiv = document.getElementById("plot");
+const outDiv = document.getElementById("output");
+
+function updateLineNumbers() {
+  const lines = codeEl.value.split("\n").length;
+  let nums = "";
+  for (let i=1;i<=lines;i++) nums += i + "\n";
+  lineNumbers.textContent = nums;
+}
+codeEl.addEventListener("input", updateLineNumbers);
+codeEl.addEventListener("scroll", () => lineNumbers.scrollTop = codeEl.scrollTop);
+updateLineNumbers();
+
+async function runCode() {
+  pyodide = await pyodideReady;
+  outDiv.innerText = "Running...";
+  plotDiv.innerHTML = "";
+
+  await pyodide.loadPackage(["numpy","matplotlib"]);
+
+  try {
+    await pyodide.runPythonAsync(`
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+plt.rcParams.update({'figure.facecolor':'white','axes.facecolor':'white'})
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+    await pyodide.runPythonAsync(codeEl.value);
+
+    let out = await pyodide.runPythonAsync("sys.stdout.getvalue()");
+    outDiv.innerText = out;
+
+  } catch (err) {
+    outDiv.innerText = err;
+  }
+}
+
+function downloadPlot(ext) {
+  alert("No plot generated in this example.");
+}
+</script>
+
+</body>
+</html>

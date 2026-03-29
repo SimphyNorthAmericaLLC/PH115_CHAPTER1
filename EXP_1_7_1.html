@@ -1,0 +1,113 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Gaussian Surface – Interactive</title>
+<style>
+body { margin:0; overflow:hidden; background:white; }
+</style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+
+// Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(
+    45,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    100
+);
+camera.position.set(3, 2, 3);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Orbit Controls
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// Light
+const light = new THREE.PointLight(0xffffff, 1);
+light.position.set(5,5,5);
+scene.add(light);
+
+// Gaussian Sphere
+const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
+const sphereMaterial = new THREE.MeshPhongMaterial({
+    color: 0xddddff,
+    transparent: true,
+    opacity: 0.25
+});
+const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+scene.add(sphere);
+
+// Central Charge
+const chargeGeometry = new THREE.SphereGeometry(0.15, 32, 32);
+const chargeMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
+const charge = new THREE.Mesh(chargeGeometry, chargeMaterial);
+scene.add(charge);
+
+// Fibonacci sphere distribution
+function fibonacciSphere(n) {
+    const points = [];
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < n; i++) {
+        const z = 1 - 2*(i+0.5)/n;
+        const r = Math.sqrt(1 - z*z);
+        const phi = i * golden;
+        const x = r*Math.cos(phi);
+        const y = r*Math.sin(phi);
+        points.push(new THREE.Vector3(x,y,z));
+    }
+    return points;
+}
+
+// Field Rays
+const N = 30;
+const directions = fibonacciSphere(N);
+
+directions.forEach(dir => {
+    const origin = new THREE.Vector3(0,0,0);
+    const length = 1.8;
+    const arrow = new THREE.ArrowHelper(
+        dir.normalize(),
+        origin,
+        length,
+        0xffcc00,
+        0.25,
+        0.12
+    );
+    scene.add(arrow);
+});
+
+// Animation loop
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// Resize handling
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+
+</body>
+</html>

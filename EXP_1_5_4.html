@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>EXP_1_5_4.html</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body { background:#1e1e1e; color:white; font-family:monospace; padding:15px; }
+.editor { display:flex; border:1px solid #444; height:420px; }
+#lineNumbers {
+  background:#111; color:#00ff00; padding:10px 8px;
+  text-align:right; overflow:hidden; white-space:pre;
+}
+#code {
+  flex:1; background:#111; color:white; border:none;
+  padding:10px; resize:none; overflow:auto; white-space:pre;
+}
+button {
+  margin-top:10px; margin-right:6px;
+  padding:8px 14px; background:#007acc;
+  color:white; border:none; cursor:pointer;
+}
+#output {
+  background:#111; padding:10px; margin-top:10px;
+  min-height:120px; white-space:pre-wrap;
+}
+#plot { margin-top:15px; background:white; padding:10px; border-radius:8px; }
+#plotButtons { margin-top:10px; display:none; }
+</style>
+</head>
+
+<body>
+<h3>EXP_1_5_4.html</h3>
+
+<div class="editor">
+<pre id="lineNumbers"></pre>
+<textarea id="code" wrap="off">import math
+import matplotlib.pyplot as plt
+
+# Given values
+ke = 8.99e9
+q1 = 1e-6
+q2 = 1e-6
+m1 = 0.01
+m2 = 0.02
+r_initial = 2
+r_final = 5
+
+U_initial = ke * q1 * q2 / r_initial
+U_final = ke * q1 * q2 / r_final
+K = U_initial - U_final
+
+v1 = math.sqrt(2 * K / (m1 + m1**2 / m2))
+v2 = (m1 / m2) * v1
+
+print(f"Velocity of charge 1 (m1 = 0.01 kg): {v1:.3f} m/s")
+print(f"Velocity of charge 2 (m2 = 0.02 kg): {v2:.3f} m/s")
+</textarea>
+</div>
+
+<div>
+<button onclick="runCode()">Run</button>
+</div>
+
+<div id="plotButtons">
+<button onclick="downloadPlot('png')">Save PNG</button>
+<button onclick="downloadPlot('pdf')">Save PDF</button>
+<button onclick="downloadPlot('svg')">Save SVG</button>
+</div>
+
+<div id="output"></div>
+<div id="plot"></div>
+
+<script>
+let pyodideReady = loadPyodide();
+let pyodide = null;
+
+const codeEl = document.getElementById("code");
+const lineNumbers = document.getElementById("lineNumbers");
+const plotDiv = document.getElementById("plot");
+const outDiv = document.getElementById("output");
+const plotButtons = document.getElementById("plotButtons");
+
+function updateLineNumbers() {
+  const lines = codeEl.value.split("\n").length;
+  let nums = "";
+  for (let i=1;i<=lines;i++) nums += i + "\n";
+  lineNumbers.textContent = nums;
+}
+codeEl.addEventListener("input", updateLineNumbers);
+codeEl.addEventListener("scroll", () => lineNumbers.scrollTop = codeEl.scrollTop);
+updateLineNumbers();
+
+async function runCode() {
+  pyodide = await pyodideReady;
+  outDiv.innerText = "Running...";
+  plotDiv.innerHTML = "";
+  plotButtons.style.display = "none";
+
+  await pyodide.loadPackage(["matplotlib"]);
+
+  try {
+    await pyodide.runPythonAsync(`
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+plt.rcParams.update({'figure.facecolor':'white','axes.facecolor':'white'})
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+    await pyodide.runPythonAsync(codeEl.value);
+
+    let out = await pyodide.runPythonAsync("sys.stdout.getvalue()");
+    outDiv.innerText = out;
+
+  } catch (err) {
+    outDiv.innerText = err;
+  }
+}
+
+function downloadPlot(ext) {
+  alert("No plot generated in this example.");
+}
+</script>
+
+</body>
+</html>

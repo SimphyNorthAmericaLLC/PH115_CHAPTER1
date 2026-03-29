@@ -1,0 +1,225 @@
+<div id="quiz2" style="max-width:760px;font-family:system-ui, sans-serif;line-height:1.45">
+  <h3 id="q2_progress"></h3>
+  <div id="q2_stem" style="margin:.5rem 0 1rem"></div>
+  <div id="q2_options"></div>
+  <div id="q2_feedback" style="margin-top:.75rem"></div>
+  <button id="q2_restart" style="display:none;margin-top:1rem">Restart</button>
+</div>
+
+<script>
+(() => {
+  // Same engine, new dataset
+  const QUESTIONS = [
+    {
+      original: "We place several negative charges right at the center of a conductor. As a result, the electric field inside the conductor will be: a) proportional to total charge b) reversely proportional to the total charge c) none of these",
+      choices: ["proportional to the charge we placed","reversely proportional to the charge we placed","none of these"],
+      correctIndex: 2
+    },
+    {
+      original: "Gauss’s law for electricity: a) is not always accurate and it depends on the implemented distance b) always holds true",
+      choices: ["is not always accurate and it depends on the implemented distance","always holds true"],
+      correctIndex: 1
+    },
+    {
+      original: "Gauss’s law for electricity is: a) a vector equation b) a scalar equation c) none of these",
+      choices: ["a vector equation","a scalar equation","none of these"],
+      correctIndex: 1
+    },
+    {
+      original: "Gauss’s law for electricity is valid: a) for a spherical surface b) for a cylindrical surface c) spherical or cylindrical surfaces d) for all surfaces of any shape",
+      choices: ["for a spherical surface","for a cylindrical surface","spherical or cylindrical surfaces","for all surfaces of any shape"],
+      correctIndex: 3
+    },
+    {
+      original: "The electric field inside a charged conductor is always: a) zero b) non-zero or c) it can be both, depending on the charge",
+      choices: ["zero","non-zero","it can be both, depending on the charge"],
+      correctIndex: 0
+    },
+    {
+      original: "The electric potential inside a charged conductor is always: a) zero b) non-zero or c) it can be both, depending on the charge",
+      choices: ["zero","non-zero","it can be both, depending on the charge"],
+      correctIndex: 1
+    },
+    {
+      original: "The electric field inside a charged insulator is always: a) zero b) non-zero or c) it can be both, depending on the charge",
+      choices: ["zero","non-zero","it can be both, depending on the charge"],
+      correctIndex: 2
+    },
+    {
+      original: "The electric potential inside a charged insulator is always: a) zero b) non-zero or c) it can be both, depending on the charge",
+      choices: ["zero","non-zero","it can be both, depending on the charge"],
+      correctIndex: 2
+    },
+    {
+      original: "The word electron means: a) something round and very small b) something round, very small that has charge c) amber d) none of these",
+      choices: ["something round and very small","something round, very small that has charge","amber","none of these"],
+      correctIndex: 2
+    },
+    {
+      original: "The Coulomb constant is: a) the same across all media b) highly depends on the medium",
+      choices: ["the same across all media","highly depends on the medium"],
+      correctIndex: 1
+    },
+    {
+      original: "The first information regarding the charge of the electron was provided by: a) Albert Einstein b) Michael Faraday c) Nicolai Tesla d) Millikan and Fletcher",
+      choices: ["Albert Einstein","Michael Faraday","Nicolai Tesla","Millikan and Fletcher"],
+      correctIndex: 3
+    },
+    {
+      original: "A charged droplet can have the following total charge: a) 3.7 x 10^-19 C b) 16 x 10^-19 C c) 3.4 x 10^-19 C d) all of these e) none of these",
+      choices: ["3.7 x 10^-19 C","16 x 10^-19 C","3.4 x 10^-19 C","all of these","none of these"],
+      correctIndex: 1
+    },
+    {
+      original: "An electron-volt is a unit for: a) charge b) energy c) power d) none of these",
+      choices: ["charge","energy","power","none of these"],
+      correctIndex: 1
+    },
+    {
+      original: "What keeps an electron of an atom from coming crashing down to the positive nucleus is: a) the Coulomb forces b) the limitations imposed by quantum physics c) the limitations imposed by the speed of light d) none of these",
+      choices: ["the Coulomb forces","the limitations imposed by quantum physics","the limitations imposed by the speed of light","none of these"],
+      correctIndex: 1
+    },
+    {
+      original: "If an electron is placed inside a uniform electric field, then it will always move towards: a) lower electric potential energy b) higher electric potential energy c) none of these",
+      choices: ["lower electric potential energy","higher electric potential energy","none of these"],
+      correctIndex: 0
+    },
+    {
+      original: "If a proton is placed inside a uniform electric field, then it will always move towards: a) lower electric potential energy b) higher electric potential energy c) none of these",
+      choices: ["lower electric potential energy","higher electric potential energy","none of these"],
+      correctIndex: 0
+    },
+    {
+      original: "If a charge is placed along an equipotential “surface,” then it is expected to: a) accelerate b) decelerate c) do nothing",
+      choices: ["accelerate","decelerate","do nothing"],
+      correctIndex: 2
+    },
+    {
+      original: "If we made an analogy between electrons and planets, then the electrons that reside in the outer shell of an atom have: a) more potential and less kinetic energy b) less potential and more kinetic energy c) none of these apply",
+      choices: ["more potential and less kinetic energy","less potential and more kinetic energy","none of these apply"],
+      correctIndex: 0
+    },
+    {
+      original: "When observing the two ends of a discharge from a VDG, then typically if the brighter side is towards the charge collector, then the VDG is charged a) negative, b) positively, c) there is no difference in the brightness.",
+      choices: ["negative","positively","there is no difference in the brightness"],
+      correctIndex: 0
+    },
+    {
+      original: "Humidity in the air will cause a) higher breakdown voltage, b) lower breakdown voltage, c) will make no difference.",
+      choices: ["higher breakdown voltage","lower breakdown voltage","will make no difference"],
+      correctIndex: 0
+    },
+    {
+      original: "In low pressure conditions, an electric discharge would be a) brighter, b) dimmer, c) no effect on the brightness.",
+      choices: ["brighter","dimmer","no effect on the brightness"],
+      correctIndex: 1
+    },
+    {
+      original: "In low pressure conditions, an electric discharge would be a) straighter, b) more zigzag, c) no effect on the shape.",
+      choices: ["straighter","more zigzag","no effect on the shape"],
+      correctIndex: 0
+    },
+    {
+      original: "When sometimes you reach for the doorknob and it shows you that this discharge is of the order of a) thousands of volts, b) hundreds of volts, c) a couple of volts.",
+      choices: ["thousands of volts","hundreds of volts","a couple of volts"],
+      correctIndex: 0
+    },
+    {
+      original: "The electric field from a spherical VDG reduces as a function of distance like a) 1/r,  b) 1/r^2, c) 1/r^3.",
+      choices: ["1/r","1/r^2","1/r^3"],
+      correctIndex: 1
+    },
+    {
+      original: "When the electric field strength exceeds about three million volts per meter, then the air a) becomes a good conductor of electricity, b) the number of free electrons in the air is greatly increased, c) all of these, b) d) none of these.",
+      choices: ["becomes a bad conductor of electricity","the number of free electrons in the air is greatly increased","all of these","none of these"],
+      correctIndex: 1
+    },
+    {
+      original: "The air under normal conditions is a) a good conductor of electricity, b) a bad conductor of electricity.",
+      choices: ["a good conductor of electricity","a bad conductor of electricity"],
+      correctIndex: 1
+    },
+    {
+      original: "The sound we hear during a VDG sparking is because a) air expands from the sudden heating, b) the collision between the electrons and the atoms, c) circuit cracking inside the VDG, d) none of these.",
+      choices: ["air expands from the sudden heating","the collision between the electrons and the atoms","circuit cracking inside the VDG","none of these"],
+      correctIndex: 0
+    },
+    {
+      original: "Triboelectricity is a phenomenon that can happen between a) a specific combination of materials, b) any materials.",
+      choices: ["a specific combination of materials","any materials"],
+      correctIndex: 0
+    }
+  ];
+
+  const letters = "abcdefghijklmnopqrstuvwxyz".split("");
+
+  function stemFrom(original){
+    const i = original.indexOf("a)");
+    return (i === -1) ? original : original.slice(0, i).replace(/[ ;:,.]+$/,"");
+  }
+
+  function runQuiz(){
+    let index = 0, score = 0;
+    const root = document.getElementById("quiz2");
+    const progress = document.getElementById("q2_progress");
+    const stem = document.getElementById("q2_stem");
+    const options = document.getElementById("q2_options");
+    const feedback = document.getElementById("q2_feedback");
+    const restartBtn = document.getElementById("q2_restart");
+    restartBtn.style.display = "none";
+
+    function render(){
+      const total = QUESTIONS.length;
+      const q = QUESTIONS[index];
+      progress.textContent = `[${index+1}/${total}]`;
+      stem.textContent = stemFrom(q.original);
+      options.innerHTML = "";
+      feedback.textContent = "";
+      q.choices.forEach((text, i) => {
+        const btn = document.createElement("button");
+        btn.textContent = ` ${letters[i]}) ${text}`;
+        btn.style.display = "block";
+        btn.style.margin = ".25rem 0";
+        btn.onclick = () => select(i);
+        options.appendChild(btn);
+      });
+    }
+
+    function select(i){
+      const q = QUESTIONS[index];
+      if(i !== q.correctIndex){
+        // restart behavior
+        progress.textContent = "";
+        stem.textContent = "";
+        options.innerHTML = "";
+        feedback.textContent = "Incorrect. Restarting the quiz from the beginning...";
+        restartBtn.style.display = "inline-block";
+        restartBtn.onclick = () => runQuiz();
+        return;
+      }
+      score++;
+      feedback.textContent = "✔ Correct!";
+      index++;
+      if(index < QUESTIONS.length){
+        setTimeout(render, 400);
+      }else{
+        setTimeout(() => {
+          progress.textContent = "";
+          stem.textContent = "";
+          options.innerHTML = "";
+          feedback.innerHTML = `✅ Perfect! You answered all questions correctly.<br>Score: ${score}/${QUESTIONS.length}`;
+          try { localStorage.setItem("quiz2Score", JSON.stringify({score, total: QUESTIONS.length, ts: Date.now()})); } catch(e){}
+          restartBtn.style.display = "inline-block";
+          restartBtn.textContent = "Restart";
+          restartBtn.onclick = () => runQuiz();
+        }, 300);
+      }
+    }
+
+    render();
+  }
+
+  runQuiz();
+})();
+</script>
