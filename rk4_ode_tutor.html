@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>rk4_ode_tutor.html</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body {
+    background-color: #1e1e1e;
+    color: white;
+    font-family: monospace;
+    padding: 15px;
+}
+
+.editor {
+    display: flex;
+    border: 1px solid #444;
+    height: 420px;
+    font-family: monospace;
+}
+
+#lineNumbers {
+    background: #111;
+    color: #00ff00;
+    padding: 10px 8px;
+    margin: 0;
+    text-align: right;
+    user-select: none;
+    overflow: hidden;
+    white-space: pre;
+    line-height: 1.4em;
+}
+
+#code {
+    flex: 1;
+    background: #111;
+    color: white;
+    border: none;
+    padding: 10px;
+    resize: none;
+    overflow: auto;
+    white-space: pre;
+    line-height: 1.4em;
+    font-family: monospace;
+}
+
+button {
+    margin-top: 10px;
+    margin-right: 6px;
+    padding: 8px 14px;
+    background: #007acc;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+#output {
+    background: #111;
+    padding: 10px;
+    margin-top: 10px;
+    min-height: 120px;
+    white-space: pre-wrap;
+}
+
+#plot {
+    margin-top: 10px;
+    border: 1px solid #555;
+    max-width: 100%;
+}
+</style>
+</head>
+
+<body>
+
+<h3>rk4_ode_tutor.html</h3>
+
+<div class="editor">
+<pre id="lineNumbers"></pre>
+<textarea id="code" wrap="off">import matplotlib
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+plt.rcParams.update({
+    'figure.facecolor': 'white',
+    'axes.facecolor': 'white',
+    'axes.labelsize': 12,
+    'axes.titlesize': 14,
+    'axes.linewidth': 1.2,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 10
+})
+
+# Example ODE:
+# dy/dt = y - t^2 + 1
+# y(0) = 0.5
+# Exact solution: y(t) = (t + 1)^2 - 0.5*exp(t)
+
+def f(t, y):
+    return y - t**2 + 1
+
+def y_exact(t):
+    return (t + 1)**2 - 0.5*np.exp(t)
+
+# User choices
+h = 0.2
+steps = 6
+t0 = 0.0
+y0 = 0.5
+
+print("Illustrating RK4 for dy/dt = y - t^2 + 1, with y(0)=0.5")
+print(f"Step size h = {h}")
+print("-" * 70)
+
+# Storage for plotting
+T = [t0]
+Y = [y0]
+Yex = [y_exact(t0)]
+
+# Current values
+t = t0
+y = y0
+
+for n in range(steps):
+    k1 = f(t, y)
+    k2 = f(t + h/2, y + h*k1/2)
+    k3 = f(t + h/2, y + h*k2/2)
+    k4 = f(t + h, y + h*k3)
+
+    y_next = y + (h/6)*(k1 + 2*k2 + 2*k3 + k4)
+    t_next = t + h
+    exact_next = y_exact(t_next)
+    error = abs(y_next - exact_next)
+
+    print(f"Step {n+1}")
+    print(f"  t_n      = {t:.4f}")
+    print(f"  y_n      = {y:.6f}")
+    print(f"  k1       = f(t_n, y_n)                  = {k1:.6f}")
+    print(f"  k2       = f(t_n+h/2, y_n+h*k1/2)      = {k2:.6f}")
+    print(f"  k3       = f(t_n+h/2, y_n+h*k2/2)      = {k3:.6f}")
+    print(f"  k4       = f(t_n+h,   y_n+h*k3)        = {k4:.6f}")
+    print(f"  y_(n+1)  = y_n + (h/6)(k1+2k2+2k3+k4) = {y_next:.6f}")
+    print(f"  exact    = {exact_next:.6f}")
+    print(f"  |error|  = {error:.6e}")
+    print("-" * 70)
+
+    t, y = t_next, y_next
+    T.append(t)
+    Y.append(y)
+    Yex.append(exact_next)
+
+# Smooth exact curve
+Tfine = np.linspace(t0, T[-1], 300)
+Yfine = y_exact(Tfine)
+
+plt.figure(figsize=(8, 5))
+plt.plot(T, Y, 'o-', label='RK4 numerical solution')
+plt.plot(Tfine, Yfine, label='Exact solution')
+plt.xlabel('t')
+plt.ylabel('y')
+plt.title('RK4 Illustration for a Simple ODE')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("plot.png")
+plt.savefig("plot.pdf")
+plt.savefig("plot.svg")</textarea>
+</div>
+
+<button onclick="runCode()">Run</button>
+<button onclick="downloadPlot('png')">Download PNG</button>
+<button onclick="downloadPlot('pdf')">Download PDF</button>
+<button onclick="downloadPlot('svg')">Download SVG</button>
+
+<div id="output"></div>
+<img id="plot"/>
+
+<script>
+let pyodideReady = loadPyodide();
+let pyodide;
+
+const code = document.getElementById("code");
+const lineNumbers = document.getElementById("lineNumbers");
+
+function updateLineNumbers() {
+    const lines = code.value.split("\n").length;
+    let numbers = "";
+    for (let i = 1; i <= lines; i++) {
+        numbers += i + "\n";
+    }
+    lineNumbers.textContent = numbers;
+}
+
+code.addEventListener("input", updateLineNumbers);
+code.addEventListener("scroll", () => {
+    lineNumbers.scrollTop = code.scrollTop;
+});
+
+updateLineNumbers();
+
+async function runCode() {
+    pyodide = await pyodideReady;
+
+    document.getElementById("output").innerText = "Running...";
+    document.getElementById("plot").src = "";
+
+    await pyodide.loadPackage(["numpy", "matplotlib"]);
+
+    try {
+        await pyodide.runPythonAsync(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+`);
+
+        await pyodide.runPythonAsync(code.value);
+
+        let output = await pyodide.runPythonAsync("sys.stdout.getvalue()");
+        document.getElementById("output").innerText = output;
+
+        let img = pyodide.FS.readFile("plot.png", {encoding:"binary"});
+        let blob = new Blob([img], {type:"image/png"});
+        document.getElementById("plot").src = URL.createObjectURL(blob);
+
+    } catch(err) {
+        document.getElementById("output").innerText = err;
+    }
+}
+
+function downloadPlot(format) {
+    try {
+        let file = pyodide.FS.readFile("plot." + format, {encoding:"binary"});
+        let blob = new Blob([file], {type:"application/octet-stream"});
+        let link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "plot." + format;
+        link.click();
+    } catch(err) {
+        alert("Run the code first to generate the plot.");
+    }
+}
+</script>
+
+</body>
+</html>
