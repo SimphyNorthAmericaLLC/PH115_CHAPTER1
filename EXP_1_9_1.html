@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Paschen Curve - Separate Pressure and Distance Views</title>
+<style>
+  :root {
+    --bg: #101418; --panel:#182028; --panel2:#1f2a35; --text:#eef3f8; --muted:#b6c3d1;
+    --accent:#57b1ff; --border:#304150; --good:#8be28b; --warn:#ffd166;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width: 1380px; margin:0 auto; padding:18px; }
+  h1 { margin:0 0 8px; font-size:2rem; }
+  .subtitle { color:var(--muted); line-height:1.45; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns: 360px 1fr; gap:16px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:0 10px 24px rgba(0,0,0,0.22); }
+  .control-group { margin-bottom:14px; }
+  label { display:block; margin-bottom:6px; font-size:0.92rem; color:var(--muted); }
+  select, input, button { width:100%; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--text); padding:10px 12px; font-size:0.95rem; }
+  input[type="range"] { padding:0; }
+  button { cursor:pointer; font-weight:700; }
+  button.primary { background:var(--accent); color:#08131d; border:none; }
+  .buttons { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row2,.row3 { display:grid; gap:10px; }
+  .row2 { grid-template-columns:1fr 1fr; }
+  .row3 { grid-template-columns:1fr 1fr 1fr; }
+  .small { color:var(--muted); font-size:0.84rem; line-height:1.4; }
+  .formula { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px; margin-top:10px; font-family:"Times New Roman", serif; overflow-x:auto; line-height:1.4; }
+  .plots { display:grid; grid-template-columns:1fr; gap:16px; }
+  canvas { width:100%; height:340px; display:block; background:#fff; border-radius:12px; }
+  .titleline { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+  .plotTitle { font-size:1.06rem; font-weight:700; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:0.85rem; margin-top:8px; }
+  .legend .item { display:flex; align-items:center; gap:6px; }
+  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  .info { margin-top:12px; display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; }
+  .stat { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+  .k { font-size:0.8rem; color:var(--muted); margin-bottom:4px; }
+  .v { font-size:1rem; font-weight:700; }
+  .hoverbox { font-size:0.9rem; color:var(--warn); }
+  @media (max-width: 1040px) { .grid { grid-template-columns:1fr; } .info { grid-template-columns:1fr 1fr; } canvas { height:290px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Paschen Law Explorer: Breakdown Voltage vs Pressure, Distance, and \(pd\)</h1>
+  <div class="subtitle">
+    This version separates the two experimental knobs students actually control: gas pressure and plate spacing. The classic Paschen curve is still shown so they can connect the usual \(p d\) picture to the two separate views.
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="control-group">
+        <label for="gasSelect">Gas preset</label>
+        <select id="gasSelect"></select>
+      </div>
+      <div class="row3 control-group">
+        <div><label for="Ainput">A [(kPa·cm)<sup>-1</sup>]</label><input id="Ainput" type="number" step="0.1"></div>
+        <div><label for="Binput">B [V/(kPa·cm)]</label><input id="Binput" type="number" step="0.1"></div>
+        <div><label for="ginput">γ<sub>se</sub></label><input id="ginput" type="number" step="0.001" min="0.0001"></div>
+      </div>
+      <div class="row2 control-group">
+        <div><label for="pSlider">Current pressure: <span id="pLabel"></span> kPa</label><input id="pSlider" type="range" min="0.1" max="300" step="0.1" value="101.3"></div>
+        <div><label for="dSlider">Current distance: <span id="dLabel"></span> cm</label><input id="dSlider" type="range" min="0.001" max="1.0" step="0.001" value="0.01"></div>
+      </div>
+      <div class="row2 control-group">
+        <div><label for="pmax">Pressure plot max [kPa]</label><input id="pmax" type="number" min="1" step="1" value="250"></div>
+        <div><label for="dmax">Distance plot max [cm]</label><input id="dmax" type="number" min="0.01" step="0.01" value="0.5"></div>
+      </div>
+      <div class="row2 control-group">
+        <div><label for="pdmin">Classic plot min pd [kPa·cm]</label><input id="pdmin" type="number" min="0.0001" step="0.0001" value="0.001"></div>
+        <div><label for="pdmax">Classic plot max pd [kPa·cm]</label><input id="pdmax" type="number" min="0.01" step="0.01" value="100"></div>
+      </div>
+      <div class="row2 control-group">
+        <div><label for="pts">Plot points</label><input id="pts" type="number" min="150" max="2500" step="50" value="700"></div>
+        <div><label for="ycap">Voltage axis cap [V]</label><input id="ycap" type="number" min="100" step="50" value="2500"></div>
+      </div>
+      <div class="buttons">
+        <button class="primary" id="updateBtn">Update Plots</button>
+        <button id="resetBtn">Reset Preset</button>
+        <button id="pngBtn">Save PNG</button>
+        <button id="csvBtn">Save CSV</button>
+      </div>
+      <div class="formula">
+        V_B = \dfrac{B(pd)}{\ln(Apd)-\ln\!\left[\ln\!\left(1+\dfrac{1}{\gamma_{se}}\right)\right]}
+      </div>
+      <p class="small">The breakdown voltage depends primarily on the product \(pd\), but these two extra plots help students see how changing only pressure or only spacing affects the experiment.</p>
+      <p class="small">Hover any curve to read the coordinates and identify the operating point.</p>
+    </div>
+
+    <div class="plots">
+      <div class="card">
+        <div class="titleline"><div class="plotTitle">Breakdown Voltage vs Pressure</div><div class="hoverbox" id="hover1">Hover a curve</div></div>
+        <canvas id="canvasP" width="920" height="340"></canvas>
+        <div class="legend" id="legendP"></div>
+      </div>
+      <div class="card">
+        <div class="titleline"><div class="plotTitle">Breakdown Voltage vs Distance</div><div class="hoverbox" id="hover2">Hover a curve</div></div>
+        <canvas id="canvasD" width="920" height="340"></canvas>
+        <div class="legend" id="legendD"></div>
+      </div>
+      <div class="card">
+        <div class="titleline"><div class="plotTitle">Classic Paschen Curve: Breakdown Voltage vs \(pd\)</div><div class="hoverbox" id="hover3">Hover a curve</div></div>
+        <canvas id="canvasPD" width="920" height="340"></canvas>
+        <div class="legend" id="legendPD"></div>
+        <div class="info">
+          <div class="stat"><div class="k">Preset</div><div class="v" id="statGas">Air</div></div>
+          <div class="stat"><div class="k">Current operating point</div><div class="v" id="statPoint">--</div></div>
+          <div class="stat"><div class="k">Paschen minimum \(pd\)</div><div class="v" id="statPd">--</div></div>
+          <div class="stat"><div class="k">Paschen minimum voltage</div><div class="v" id="statVmin">--</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const presets = {
+  "Air":      { A: 112.5, B: 2737.5, gamma: 0.01 },
+  "Nitrogen": { A: 105.0, B: 3000.0, gamma: 0.01 },
+  "Argon":    { A: 103.0, B: 1126.0, gamma: 0.01 },
+  "Helium":   { A: 30.0,  B: 650.0,  gamma: 0.01 },
+  "Neon":     { A: 45.0,  B: 1200.0, gamma: 0.01 },
+  "Custom":   { A: 112.5, B: 2737.5, gamma: 0.01 }
+};
+const palette = ['#1f77b4','#d62728','#2ca02c','#9467bd','#ff7f0e','#17becf'];
+
+const $ = id => document.getElementById(id);
+const gasSelect = $('gasSelect'), Ainput=$('Ainput'), Binput=$('Binput'), ginput=$('ginput');
+const pSlider=$('pSlider'), dSlider=$('dSlider'), pLabel=$('pLabel'), dLabel=$('dLabel');
+const pmaxInput=$('pmax'), dmaxInput=$('dmax'), pdminInput=$('pdmin'), pdmaxInput=$('pdmax'), ptsInput=$('pts'), ycapInput=$('ycap');
+const statGas=$('statGas'), statPoint=$('statPoint'), statPd=$('statPd'), statVmin=$('statVmin');
+const hoverEls = [$('hover1'), $('hover2'), $('hover3')];
+
+const fixedDistances = [0.005, 0.01, 0.02, 0.05]; // cm
+const fixedPressures = [5, 20, 50, 101.3]; // kPa
+let chartStates = [];
+let exportRows = [];
+
+function populate() {
+  Object.keys(presets).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name; gasSelect.appendChild(opt);
+  });
+  gasSelect.value = 'Air';
+  loadPreset('Air');
+}
+function loadPreset(name){
+  const p = presets[name]; Ainput.value=p.A; Binput.value=p.B; ginput.value=p.gamma;
+}
+function getParams(){
+  return {
+    gas: gasSelect.value,
+    A: parseFloat(Ainput.value),
+    B: parseFloat(Binput.value),
+    gamma: Math.max(1e-6, parseFloat(ginput.value)),
+    p: parseFloat(pSlider.value),
+    d: parseFloat(dSlider.value),
+    pmax: Math.max(1, parseFloat(pmaxInput.value)),
+    dmax: Math.max(0.01, parseFloat(dmaxInput.value)),
+    pdmin: Math.max(1e-4, parseFloat(pdminInput.value)),
+    pdmax: Math.max(0.01, parseFloat(pdmaxInput.value)),
+    n: Math.max(150, parseInt(ptsInput.value)),
+    ycap: Math.max(100, parseFloat(ycapInput.value))
+  };
+}
+function paschen(pd, A, B, gamma){
+  const c = Math.log(Math.log(1 + 1/gamma));
+  const denom = Math.log(A*pd) - c;
+  if (!isFinite(denom) || denom <= 0) return NaN;
+  const v = B * pd / denom;
+  return (isFinite(v) && v>0) ? v : NaN;
+}
+function linspace(a,b,n){
+  const arr=[]; const step=(b-a)/(n-1);
+  for(let i=0;i<n;i++) arr.push(a+i*step);
+  return arr;
+}
+function logspace(a,b,n){
+  const la=Math.log10(a), lb=Math.log10(b); const arr=[]; const step=(lb-la)/(n-1);
+  for(let i=0;i<n;i++) arr.push(Math.pow(10, la+i*step));
+  return arr;
+}
+function pdMin(A,gamma){ return Math.E * Math.log(1+1/gamma)/A; }
+function vMin(A,B,gamma){ const pdm = pdMin(A,gamma); return paschen(pdm,A,B,gamma); }
+function format(x, digits=3){ if (!isFinite(x)) return '--'; if (Math.abs(x)>=1000||Math.abs(x)<0.01) return x.toExponential(2); return x.toFixed(digits); }
+
+function buildCurves(params){
+  const pressureX = linspace(0.1, params.pmax, params.n);
+  const distanceX = linspace(0.001, params.dmax, params.n);
+  const pdX = logspace(params.pdmin, params.pdmax, params.n);
+  const pressureCurves = fixedDistances.map((d, i) => ({
+    name: `d = ${format(d,3)} cm`, color: palette[i%palette.length],
+    x: pressureX, y: pressureX.map(p => paschen(p*d, params.A, params.B, params.gamma))
+  }));
+  const distanceCurves = fixedPressures.map((p, i) => ({
+    name: `p = ${format(p,1)} kPa`, color: palette[i%palette.length],
+    x: distanceX, y: distanceX.map(d => paschen(p*d, params.A, params.B, params.gamma))
+  }));
+  const pdCurves = [{ name:'Paschen curve', color: palette[0], x: pdX, y: pdX.map(pd => paschen(pd, params.A, params.B, params.gamma)) }];
+  const operatingPd = params.p * params.d;
+  const operatingV = paschen(operatingPd, params.A, params.B, params.gamma);
+  const minimumPd = pdMin(params.A, params.gamma);
+  const minimumV = vMin(params.A, params.B, params.gamma);
+  exportRows = [];
+  pressureX.forEach((x, idx) => exportRows.push({plot:'VsPressure', x, ...Object.fromEntries(pressureCurves.map(c => [c.name, c.y[idx]]))}));
+  distanceX.forEach((x, idx) => exportRows.push({plot:'VsDistance', x, ...Object.fromEntries(distanceCurves.map(c => [c.name, c.y[idx]]))}));
+  pdX.forEach((x, idx) => exportRows.push({plot:'VsPD', x, 'Paschen curve': pdCurves[0].y[idx]}));
+  return { pressureCurves, distanceCurves, pdCurves, operatingPd, operatingV, minimumPd, minimumV };
+}
+
+function legend(elId, curves, markerLabel){
+  const el = $(elId); el.innerHTML = '';
+  curves.forEach(c => {
+    const div = document.createElement('div'); div.className='item';
+    div.innerHTML = `<span class="dot" style="background:${c.color}"></span>${c.name}`;
+    el.appendChild(div);
+  });
+  const op = document.createElement('div'); op.className='item'; op.innerHTML = `<span class="dot" style="background:#111;border:2px solid #f59e0b"></span>${markerLabel}`; el.appendChild(op);
+  const min = document.createElement('div'); min.className='item'; min.innerHTML = `<span class="dot" style="background:#fff;border:2px solid #d62728"></span>Paschen minimum`; el.appendChild(min);
+}
+
+function drawChart(canvasId, hoverId, curves, xlabel, ylabel, xMode, currentPoint, minPoint, xLim, yCap){
+  const canvas = $(canvasId), ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const m = {l:96, r:18, t:18, b:48};
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  const valid = [];
+  curves.forEach((c, ci) => c.x.forEach((x, i) => { const y=c.y[i]; if (isFinite(y) && y<=yCap*1.5) valid.push({ci,i,x,y}); }));
+  const xmin = xLim[0], xmax = xLim[1], ymin = 0, ymax = yCap;
+  function sx(x){ return m.l + ((xMode==='log' ? (Math.log10(x)-Math.log10(xmin))/(Math.log10(xmax)-Math.log10(xmin)) : (x-xmin)/(xmax-xmin))) * (W-m.l-m.r); }
+  function sy(y){ return H-m.b - ((y-ymin)/(ymax-ymin))*(H-m.t-m.b); }
+  // grid
+  ctx.strokeStyle='#d9dde2'; ctx.lineWidth=1; ctx.font='12px Arial'; ctx.fillStyle='#111';
+  for(let j=0;j<=5;j++){ const y=ymin + (ymax-ymin)*j/5; const py=sy(y); ctx.beginPath(); ctx.moveTo(m.l,py); ctx.lineTo(W-m.r,py); ctx.stroke(); ctx.fillText(format(y,0), 10, py+4); }
+  if(xMode==='log'){
+    const decadeStart = Math.ceil(Math.log10(xmin)), decadeEnd = Math.floor(Math.log10(xmax));
+    for(let d=decadeStart; d<=decadeEnd; d++){
+      for(let s=1; s<10; s++){
+        const x=s*Math.pow(10,d); if(x<xmin||x>xmax) continue; const px=sx(x); ctx.strokeStyle = s===1 ? '#cfd5db' : '#edf0f2'; ctx.beginPath(); ctx.moveTo(px,m.t); ctx.lineTo(px,H-m.b); ctx.stroke();
+        if(s===1){ ctx.fillStyle='#111'; ctx.fillText(x.toExponential(0).replace('+',''), px-12, H-m.b+18); }
+      }
+    }
+  } else {
+    for(let j=0;j<=6;j++){ const x=xmin + (xmax-xmin)*j/6; const px=sx(x); ctx.strokeStyle='#d9dde2'; ctx.beginPath(); ctx.moveTo(px,m.t); ctx.lineTo(px,H-m.b); ctx.stroke(); ctx.fillStyle='#111'; ctx.fillText(format(x,2), px-12, H-m.b+18); }
+  }
+  // axes
+  ctx.strokeStyle='#111'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(m.l,m.t); ctx.lineTo(m.l,H-m.b); ctx.lineTo(W-m.r,H-m.b); ctx.stroke();
+  ctx.fillStyle='#111'; ctx.font='13px Arial'; ctx.fillText(xlabel, W/2-60, H-10);
+  ctx.save(); ctx.translate(26,H/2+55); ctx.rotate(-Math.PI/2); ctx.textAlign='center'; ctx.fillText(ylabel,0,0); ctx.restore(); ctx.textAlign='start';
+
+  const hitPoints=[];
+  curves.forEach((c, ci) => {
+    ctx.strokeStyle=c.color; ctx.lineWidth=2.2; ctx.beginPath(); let started=false;
+    c.x.forEach((x,i)=>{ const y=c.y[i]; if(!isFinite(y)||y<ymin||y>yCap) { started=false; return; } const px=sx(x), py=sy(y); hitPoints.push({ci,i,x,y,px,py,color:c.color,name:c.name}); if(!started){ ctx.moveTo(px,py); started=true; } else ctx.lineTo(px,py); });
+    ctx.stroke();
+  });
+
+  // markers
+  if (currentPoint && isFinite(currentPoint.x) && isFinite(currentPoint.y) && currentPoint.y<=yCap){
+    const px=sx(currentPoint.x), py=sy(currentPoint.y);
+    ctx.fillStyle='#f59e0b'; ctx.beginPath(); ctx.arc(px,py,5,0,2*Math.PI); ctx.fill(); ctx.strokeStyle='#111'; ctx.stroke();
+  }
+  if (minPoint && isFinite(minPoint.x) && isFinite(minPoint.y) && minPoint.y<=yCap){
+    const px=sx(minPoint.x), py=sy(minPoint.y);
+    ctx.fillStyle='#fff'; ctx.strokeStyle='#d62728'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(px,py,6,0,2*Math.PI); ctx.fill(); ctx.stroke();
+  }
+
+  const state = {canvasId, hitPoints, sx, sy, curves, currentPoint, minPoint, xlabel, xMode};
+  canvas.onmousemove = (e) => {
+    const rect=canvas.getBoundingClientRect(); const mx=(e.clientX-rect.left)*canvas.width/rect.width; const my=(e.clientY-rect.top)*canvas.height/rect.height;
+    let best=null, bd=1e9; hitPoints.forEach(p=>{ const d=(p.px-mx)**2+(p.py-my)**2; if(d<bd){bd=d;best=p;} });
+    redrawAll(best && bd<180 ? {canvasId,point:best} : null);
+  };
+  canvas.onmouseleave = ()=> redrawAll(null);
+  return state;
+}
+
+function redrawAll(hover){
+  const params = getParams();
+  const data = buildCurves(params);
+  chartStates = [
+    drawChart('canvasP','hover1',data.pressureCurves,'Pressure (kPa)','','linear',{x:params.p,y:data.operatingV},{x:data.minimumPd/params.d,y:data.minimumV},[0.1,params.pmax],params.ycap),
+    drawChart('canvasD','hover2',data.distanceCurves,'Distance (cm)','','linear',{x:params.d,y:data.operatingV},{x:data.minimumPd/params.p,y:data.minimumV},[0.001,params.dmax],params.ycap),
+    drawChart('canvasPD','hover3',data.pdCurves,'Pressure × Distance (kPa·cm)','','log',{x:data.operatingPd,y:data.operatingV},{x:data.minimumPd,y:data.minimumV},[params.pdmin,params.pdmax],params.ycap)
+  ];
+  if(hover){
+    const map = {'canvasP':0,'canvasD':1,'canvasPD':2};
+    hoverEls.forEach((el,idx)=> el.textContent = idx===map[hover.canvasId] ? `${hover.point.name}: x=${format(hover.point.x,3)}, V=${format(hover.point.y,1)} V` : 'Hover a curve');
+    const canvas=$(hover.canvasId), ctx=canvas.getContext('2d');
+    ctx.fillStyle='#2ca02c'; ctx.beginPath(); ctx.arc(hover.point.px,hover.point.py,4,0,2*Math.PI); ctx.fill(); ctx.strokeStyle='#111'; ctx.stroke();
+  } else hoverEls.forEach(el => el.textContent='Hover a curve');
+  legend('legendP', data.pressureCurves, 'current pressure');
+  legend('legendD', data.distanceCurves, 'current distance');
+  legend('legendPD', data.pdCurves, 'current operating point');
+  pLabel.textContent = format(params.p,1); dLabel.textContent = format(params.d,3);
+  statGas.textContent = params.gas; statPoint.textContent = `${format(data.operatingPd,3)} kPa·cm, ${format(data.operatingV,1)} V`; statPd.textContent = `${format(data.minimumPd,3)} kPa·cm`; statVmin.textContent = `${format(data.minimumV,1)} V`;
+}
+
+function update(){ redrawAll(null); }
+function reset(){ loadPreset(gasSelect.value); pSlider.value = 101.3; dSlider.value = 0.01; pmaxInput.value=250; dmaxInput.value=0.5; pdminInput.value=0.001; pdmaxInput.value=100; ptsInput.value=700; ycapInput.value=2500; update(); }
+function savePNG(){
+  const out=document.createElement('canvas'); out.width=1100; out.height=1380; const c=out.getContext('2d'); c.fillStyle='#101418'; c.fillRect(0,0,out.width,out.height); c.fillStyle='#eef3f8'; c.font='28px Arial'; c.fillText('Paschen Law Explorer', 30, 40);
+  ['canvasP','canvasD','canvasPD'].forEach((id, idx)=>{ c.drawImage($(id), 50, 70 + idx*430, 1000, 370); });
+  const a=document.createElement('a'); a.href=out.toDataURL('image/png'); a.download='paschen_separate_views.png'; a.click();
+}
+function saveCSV(){
+  const keys = Object.keys(exportRows[0] || {}); const lines=[keys.join(',')];
+  exportRows.forEach(r=> lines.push(keys.map(k=> JSON.stringify(r[k] ?? '')).join(',')));
+  const blob=new Blob([lines.join('\n')], {type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='paschen_separate_views.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+gasSelect.addEventListener('change', ()=>{ loadPreset(gasSelect.value); update(); });
+[pSlider,dSlider,Ainput,Binput,ginput,pmaxInput,dmaxInput,pdminInput,pdmaxInput,ptsInput,ycapInput].forEach(el=> el.addEventListener('input', update));
+$('updateBtn').addEventListener('click', update); $('resetBtn').addEventListener('click', reset); $('pngBtn').addEventListener('click', savePNG); $('csvBtn').addEventListener('click', saveCSV);
+populate(); update();
+</script>
+</body>
+</html>
