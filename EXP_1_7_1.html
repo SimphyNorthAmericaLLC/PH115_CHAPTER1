@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Multiple Charges Inside a Gaussian Sphere</title>
+<style>
+:root{
+  --bg:#07111f; --panel:#0d1b2d; --panel2:#10243c; --text:#eef6ff; --muted:#9db2c8;
+  --sphere:#69c8ff; --q1:#ffd166; --q2:#ff8f70; --field:#73e2a7; --normal:#ffb36b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#07111f,#0a1728);color:var(--text);
+font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.app{max-width:1200px;margin:0 auto;padding:18px}
+h1{font-size:clamp(1.25rem,2.8vw,2rem);margin:0 0 5px}
+.sub{color:var(--muted);max-width:950px;line-height:1.45}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;margin-top:14px}
+.card{background:rgba(13,27,45,.92);border:1px solid #20354d;border-radius:16px;padding:14px}
+.view{padding:0;overflow:hidden;position:relative;min-height:610px}
+canvas{display:block;width:100%;height:610px;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.hint{position:absolute;left:14px;bottom:12px;background:rgba(3,10,18,.74);padding:8px 10px;
+border-radius:10px;color:#bdd0e3;font-size:.82rem;pointer-events:none}
+.section{border-top:1px solid #20354d;padding-top:12px;margin-top:12px}
+.section:first-child{border-top:0;padding-top:0;margin-top:0}
+.section h2{font-size:.96rem;margin:0 0 8px}
+.control{margin:10px 0}
+label{display:flex;justify-content:space-between;gap:10px;font-size:.88rem}
+.val{color:#5fd7ff;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:#54c8f0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+button{width:100%;border:1px solid #31536f;background:#112a44;color:#ecf7ff;border-radius:10px;
+min-height:42px;padding:8px 10px;font-weight:650;cursor:pointer}
+button:hover{background:#173653}
+.toggle{display:flex;align-items:center;justify-content:flex-start;gap:9px;margin-top:9px;font-size:.88rem}
+.toggle input{width:18px;height:18px;accent-color:#54c8f0}
+.metric{padding:9px 10px;background:#0a1728;border:1px solid #213a53;border-radius:11px;margin:7px 0}
+.metric .name{font-size:.76rem;color:var(--muted)}
+.metric .num{font-size:1.06rem;font-weight:750;margin-top:2px}
+.note{font-size:.82rem;color:#bfd0df;line-height:1.45;padding:10px;background:#0b1a2b;border-left:3px solid #5fd7ff;border-radius:8px}
+.formula{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.81rem;color:#d8e8f6;
+background:#081522;border:1px solid #1e3850;padding:9px;border-radius:9px;margin-top:9px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:.8rem;color:#c9d9e7}
+.dot{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.small{font-size:.78rem;color:var(--muted);line-height:1.4}
+@media(max-width:880px){.layout{grid-template-columns:1fr}.view{min-height:520px}canvas{height:520px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Gaussian Sphere with Movable Point Charges</h1>
+  <div class="sub">
+    Use one centered charge to recover perfect spherical symmetry, then move it off-center or add a second charge.
+    The electric field on the sphere becomes non-uniform and generally non-normal to the surface, but Gauss’s law still gives the total flux from the net enclosed charge.
+  </div>
+
+  <div class="layout">
+    <div class="card view">
+      <canvas id="cv" aria-label="3D Gaussian sphere with one or two movable point charges"></canvas>
+      <div class="hint">Drag to rotate · wheel to zoom · use sliders to move each charge</div>
+    </div>
+
+    <div class="card">
+
+      <div class="section">
+        <h2>Gaussian sphere</h2>
+        <div class="control">
+          <label><span>Sphere radius</span><span class="val" id="rOut"></span></label>
+          <input id="R" type="range" min="1.5" max="3.5" step="0.1" value="2.5">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 style="color:#ffe59a">Charge 1</h2>
+        <div class="control">
+          <label><span>x-position</span><span class="val" id="x1Out"></span></label>
+          <input id="q1x" type="range" min="-2.2" max="2.2" step="0.05" value="0">
+        </div>
+        <div class="control">
+          <label><span>y-position</span><span class="val" id="y1Out"></span></label>
+          <input id="q1y" type="range" min="-2.2" max="2.2" step="0.05" value="0">
+        </div>
+        <div class="control">
+          <label><span>z-position</span><span class="val" id="z1Out"></span></label>
+          <input id="q1z" type="range" min="-2.2" max="2.2" step="0.05" value="0">
+        </div>
+        <div class="row">
+          <button id="center1" type="button">Center charge 1</button>
+          <button id="offset1" type="button">Move off-center</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="toggle"><input id="useQ2" type="checkbox"> <strong style="color:#ffad98">Add second charge</strong></label>
+        <div id="q2Controls" style="opacity:.42;pointer-events:none">
+          <div class="control">
+            <label><span>Charge 2 x-position</span><span class="val" id="x2Out"></span></label>
+            <input id="q2x" type="range" min="-2.2" max="2.2" step="0.05" value="1.0">
+          </div>
+          <div class="control">
+            <label><span>Charge 2 y-position</span><span class="val" id="y2Out"></span></label>
+            <input id="q2y" type="range" min="-2.2" max="2.2" step="0.05" value="0.5">
+          </div>
+          <div class="control">
+            <label><span>Charge 2 z-position</span><span class="val" id="z2Out"></span></label>
+            <input id="q2z" type="range" min="-2.2" max="2.2" step="0.05" value="-0.3">
+          </div>
+          <div class="row">
+            <button id="center2" type="button">Center charge 2</button>
+            <button id="offset2" type="button">Move charge 2</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="toggle"><input id="showNormals" type="checkbox" checked> Show sphere normals</label>
+        <label class="toggle"><input id="showField" type="checkbox" checked> Show actual electric field</label>
+
+        <div class="metric">
+          <div class="name">Surface field variation, Emax/Emin</div>
+          <div class="num" id="variation">—</div>
+        </div>
+
+        <div class="metric">
+          <div class="name">Numerical flux / expected flux</div>
+          <div class="num" id="flux">—</div>
+        </div>
+
+        <div class="metric">
+          <div class="name">Enclosed charge</div>
+          <div class="num" id="qenc">—</div>
+        </div>
+
+        <div class="note" id="assessment"></div>
+
+        <div class="formula">
+          Φ = ∮ E · dA = Qenc/ε₀<br>
+          Symmetry is what lets E come outside the integral.
+        </div>
+
+        <div class="legend">
+          <span><i class="dot" style="background:#ffd166"></i>charge 1</span>
+          <span><i class="dot" style="background:#ff8f70"></i>charge 2</span>
+          <span><i class="dot" style="background:#69c8ff"></i>Gaussian sphere</span>
+          <span><i class="dot" style="background:#73e2a7"></i>actual E</span>
+          <span><i class="dot" style="background:#ffb36b"></i>surface normal</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $=id=>document.getElementById(id);
+  const cv=$('cv'),ctx=cv.getContext('2d');
+  const Rsl=$('R');
+  const q1s=[$('q1x'),$('q1y'),$('q1z')];
+  const q2s=[$('q2x'),$('q2y'),$('q2z')];
+  let yaw=-0.68,pitch=0.38,zoom=1.0,drag=false,lastX=0,lastY=0;
+
+  function rot([x,y,z]){
+    const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+    const x1=cy*x+sy*z,z1=-sy*x+cy*z;
+    return [x1,cp*y-sp*z1,sp*y+cp*z1];
+  }
+  function proj(p){
+    const [x,y,z]=rot(p),w=cv.clientWidth,h=cv.clientHeight;
+    const s=74*zoom/(1+0.05*z);
+    return [w/2+x*s,h/2-y*s,z,s];
+  }
+  function seg(a,b,c,w=1,alpha=1,dash=[]){
+    const A=proj(a),B=proj(b);
+    ctx.save();ctx.strokeStyle=c;ctx.lineWidth=w;ctx.globalAlpha=alpha;ctx.setLineDash(dash);
+    ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.restore();
+  }
+  function norm(v){const m=Math.hypot(v[0],v[1],v[2])||1;return v.map(x=>x/m)}
+  function singleField(p,q,sign=1){
+    const dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],r2=dx*dx+dy*dy+dz*dz;
+    const inv=sign/Math.pow(r2,1.5);
+    return [dx*inv,dy*inv,dz*inv];
+  }
+  function totalField(p,q1,q2,use2){
+    const a=singleField(p,q1,1);
+    if(!use2)return a;
+    const b=singleField(p,q2,1);
+    return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+  }
+  function arrow(a,v,c,alpha=1,width=1.35){
+    const b=[a[0]+v[0],a[1]+v[1],a[2]+v[2]],A=proj(a),B=proj(b);
+    const dx=B[0]-A[0],dy=B[1]-A[1],m=Math.hypot(dx,dy);if(m<2)return;
+    ctx.save();ctx.strokeStyle=c;ctx.fillStyle=c;ctx.globalAlpha=alpha;ctx.lineWidth=width;
+    ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();
+    const ux=dx/m,uy=dy/m,h=6;
+    ctx.beginPath();ctx.moveTo(B[0],B[1]);
+    ctx.lineTo(B[0]-ux*h-uy*h*.5,B[1]-uy*h+ux*h*.5);
+    ctx.lineTo(B[0]-ux*h+uy*h*.5,B[1]-uy*h-ux*h*.5);
+    ctx.closePath();ctx.fill();ctx.restore();
+  }
+  function circle3(axis,val,R,color,alpha=.55){
+    const N=72;let prev=null;
+    for(let i=0;i<=N;i++){
+      const t=2*Math.PI*i/N;let p;
+      if(axis==='x')p=[val,R*Math.cos(t),R*Math.sin(t)];
+      if(axis==='y')p=[R*Math.cos(t),val,R*Math.sin(t)];
+      if(axis==='z')p=[R*Math.cos(t),R*Math.sin(t),val];
+      if(prev)seg(prev,p,color,1.05,alpha);
+      prev=p;
+    }
+  }
+  function sphereFill(R){
+    // Draw many translucent projected latitude bands to give the Gaussian
+    // surface the visual appearance of a semi-transparent 3D sphere.
+    ctx.save();
+    const bands=34, pts=72;
+    for(let ib=0; ib<bands; ib++){
+      const t1=-Math.PI/2 + Math.PI*ib/bands;
+      const t2=-Math.PI/2 + Math.PI*(ib+1)/bands;
+      ctx.beginPath();
+      let started=false;
+      for(let i=0;i<=pts;i++){
+        const ph=2*Math.PI*i/pts;
+        const p=[R*Math.cos(t1)*Math.cos(ph),R*Math.cos(t1)*Math.sin(ph),R*Math.sin(t1)];
+        const P=proj(p);
+        if(!started){ctx.moveTo(P[0],P[1]);started=true}else ctx.lineTo(P[0],P[1]);
+      }
+      for(let i=pts;i>=0;i--){
+        const ph=2*Math.PI*i/pts;
+        const p=[R*Math.cos(t2)*Math.cos(ph),R*Math.cos(t2)*Math.sin(ph),R*Math.sin(t2)];
+        const P=proj(p); ctx.lineTo(P[0],P[1]);
+      }
+      ctx.closePath();
+      ctx.fillStyle='rgba(70,175,225,0.022)';
+      ctx.fill();
+    }
+    // soft projected body tint
+    const C=proj([0,0,0]);
+    const edge=proj([R,0,0]);
+    const rr=Math.max(20,Math.hypot(edge[0]-C[0],edge[1]-C[1]));
+    const grad=ctx.createRadialGradient(C[0]-rr*.25,C[1]-rr*.28,rr*.08,C[0],C[1],rr*1.05);
+    grad.addColorStop(0,'rgba(130,220,255,0.15)');
+    grad.addColorStop(.65,'rgba(70,175,225,0.075)');
+    grad.addColorStop(1,'rgba(70,175,225,0.025)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(C[0],C[1],rr,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  function sphereWire(R){
+    circle3('x',0,R,'#8edcff',.48);
+    circle3('y',0,R,'#8edcff',.48);
+    circle3('z',0,R,'#8edcff',.58);
+    for(const f of [-.66,-.33,.33,.66]){
+      circle3('z',R*f,R*Math.sqrt(1-f*f),'#8edcff',.14);
+    }
+  }
+  function clampSet(arr,R){
+    const max=R*.88;
+    let x=+arr[0].value,y=+arr[1].value,z=+arr[2].value,d=Math.hypot(x,y,z);
+    if(d>max){
+      const s=max/d;x*=s;y*=s;z*=s;
+      arr[0].value=x.toFixed(2);arr[1].value=y.toFixed(2);arr[2].value=z.toFixed(2);
+    }
+    for(const el of arr){el.min=(-max).toFixed(2);el.max=max.toFixed(2);}
+  }
+  function metrics(R,q1,q2,use2){
+    let Emin=Infinity,Emax=0,flux=0;
+    const nTheta=44,nPhi=72;
+    for(let it=0;it<nTheta;it++){
+      const th=Math.PI*(it+.5)/nTheta,st=Math.sin(th),ct=Math.cos(th);
+      for(let ip=0;ip<nPhi;ip++){
+        const ph=2*Math.PI*(ip+.5)/nPhi;
+        const n=[st*Math.cos(ph),st*Math.sin(ph),ct];
+        const p=n.map(v=>R*v),E=totalField(p,q1,q2,use2),Em=Math.hypot(...E);
+        Emin=Math.min(Emin,Em);Emax=Math.max(Emax,Em);
+        const EdotN=E[0]*n[0]+E[1]*n[1]+E[2]*n[2];
+        const dA=R*R*st*(Math.PI/nTheta)*(2*Math.PI/nPhi);
+        flux+=EdotN*dA;
+      }
+    }
+    const expected=4*Math.PI*(use2?2:1);
+    return {variation:Emax/Math.max(Emin,1e-12),fluxRatio:flux/expected};
+  }
+  function chargePoint(q,color,label){
+    const P=proj(q);
+    ctx.save();ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=12;
+    ctx.beginPath();ctx.arc(P[0],P[1],8.5,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.fillStyle=color;ctx.font='700 14px system-ui';ctx.fillText(label,P[0]+12,P[1]-9);
+  }
+  function draw(){
+    const w=cv.clientWidth,h=cv.clientHeight,R=+Rsl.value;
+    const q1=q1s.map(e=>+e.value),q2=q2s.map(e=>+e.value),use2=$('useQ2').checked;
+    ctx.clearRect(0,0,w,h);
+    const g=ctx.createRadialGradient(w*.46,h*.44,20,w*.5,h*.5,Math.max(w,h)*.7);
+    g.addColorStop(0,'#10243b');g.addColorStop(1,'#07111f');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+
+    seg([-3.7,0,0],[3.7,0,0],'#29445e',1,.30,[5,6]);
+    seg([0,-3.7,0],[0,3.7,0],'#29445e',1,.30,[5,6]);
+    seg([0,0,-3.7],[0,0,3.7],'#29445e',1,.30,[5,6]);
+
+    sphereFill(R);
+    sphereWire(R);
+
+    const Nt=8,Np=12;
+    for(let it=1;it<Nt;it++){
+      const th=Math.PI*it/Nt,st=Math.sin(th),ct=Math.cos(th);
+      for(let ip=0;ip<Np;ip++){
+        const ph=2*Math.PI*ip/Np,n=[st*Math.cos(ph),st*Math.sin(ph),ct],p=n.map(v=>R*v);
+        if($('showNormals').checked)arrow(p,n.map(v=>v*.34),'#ffb36b',.38,1);
+        if($('showField').checked){
+          const E=totalField(p,q1,q2,use2),u=norm(E);
+          const normalDot=Math.abs(u[0]*n[0]+u[1]*n[1]+u[2]*n[2]);
+          const color=normalDot>.97?'#73e2a7':normalDot>.85?'#f0d56c':'#ff7474';
+          arrow(p,u.map(v=>v*.50),color,.92,1.3);
+        }
+      }
+    }
+
+    chargePoint(q1,'#ffd166','+q₁');
+    if(use2)chargePoint(q2,'#ff8f70','+q₂');
+
+    const C=proj([0,0,0]);
+    ctx.fillStyle='#8aa2b7';ctx.beginPath();ctx.arc(C[0],C[1],2.5,0,Math.PI*2);ctx.fill();
+  }
+  function update(){
+    const R=+Rsl.value;
+    clampSet(q1s,R);clampSet(q2s,R);
+    const q1=q1s.map(e=>+e.value),q2=q2s.map(e=>+e.value),use2=$('useQ2').checked;
+    $('q2Controls').style.opacity=use2?'1':'.42';
+    $('q2Controls').style.pointerEvents=use2?'auto':'none';
+
+    $('rOut').textContent=R.toFixed(1)+' m';
+    $('x1Out').textContent=q1[0].toFixed(2)+' m';$('y1Out').textContent=q1[1].toFixed(2)+' m';$('z1Out').textContent=q1[2].toFixed(2)+' m';
+    $('x2Out').textContent=q2[0].toFixed(2)+' m';$('y2Out').textContent=q2[1].toFixed(2)+' m';$('z2Out').textContent=q2[2].toFixed(2)+' m';
+
+    const m=metrics(R,q1,q2,use2);
+    $('variation').textContent=m.variation.toFixed(2)+'×';
+    $('flux').textContent=m.fluxRatio.toFixed(4);
+    $('qenc').textContent=use2?'2q':'q';
+
+    const d1=Math.hypot(...q1),d2=Math.hypot(...q2);
+    let msg;
+    if(!use2 && d1/R<.02){
+      msg='Perfect spherical symmetry. The charge is at the center, so E has the same magnitude everywhere on the sphere and is parallel to the surface normal.';
+    } else if(!use2){
+      msg='The single charge is still enclosed, so the total flux is q/ε₀. But because the charge is off-center, E varies over the sphere and is not generally normal to the surface. Gauss’s law remains true; the symmetry shortcut does not.';
+    } else {
+      const centered1=d1/R<.02, centered2=d2/R<.02;
+      if(centered1 && centered2){
+        msg='Both charges are centered. Spherical symmetry is restored, and the sphere behaves like a centered charge of total magnitude 2q.';
+      } else {
+        msg='With two enclosed charges, the total flux is 2q/ε₀, independent of where the charges sit inside the sphere. The field pattern, however, is generally not spherically symmetric, so E cannot be pulled outside the surface integral.';
+      }
+    }
+    $('assessment').textContent=msg;draw();
+  }
+  function resize(){
+    const dpr=Math.min(2,window.devicePixelRatio||1),r=cv.getBoundingClientRect();
+    cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);draw();
+  }
+
+  [Rsl,...q1s,...q2s,$('useQ2'),$('showNormals'),$('showField')].forEach(el=>el.addEventListener('input',update));
+  $('center1').addEventListener('click',()=>{q1s.forEach(e=>e.value=0);update()});
+  $('offset1').addEventListener('click',()=>{const R=+Rsl.value;q1s[0].value=(.52*R).toFixed(2);q1s[1].value=(.10*R).toFixed(2);q1s[2].value=(-.14*R).toFixed(2);update()});
+  $('center2').addEventListener('click',()=>{q2s.forEach(e=>e.value=0);update()});
+  $('offset2').addEventListener('click',()=>{const R=+Rsl.value;q2s[0].value=(-.43*R).toFixed(2);q2s[1].value=(.34*R).toFixed(2);q2s[2].value=(.12*R).toFixed(2);update()});
+
+  cv.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY;cv.setPointerCapture(e.pointerId)});
+  cv.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-lastX)*.009;pitch+=(e.clientY-lastY)*.009;
+    pitch=Math.max(-1.35,Math.min(1.35,pitch));lastX=e.clientX;lastY=e.clientY;draw()});
+  cv.addEventListener('pointerup',()=>drag=false);cv.addEventListener('pointercancel',()=>drag=false);
+  cv.addEventListener('wheel',e=>{e.preventDefault();zoom*=Math.exp(-e.deltaY*.001);zoom=Math.max(.55,Math.min(1.7,zoom));draw()},{passive:false});
+  window.addEventListener('resize',resize);
+
+  resize();update();
+})();
+</script>
+</body>
+</html>
