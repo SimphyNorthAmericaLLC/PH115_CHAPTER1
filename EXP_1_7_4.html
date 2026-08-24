@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Finite Line Charge & Gaussian Cylinder</title>
+<style>
+  :root{
+    --bg:#07111f; --panel:#0d1b2d; --panel2:#10243c; --text:#eef6ff; --muted:#9db2c8;
+    --accent:#5fd7ff; --accent2:#ffd166; --good:#73e2a7; --warn:#ff9f68; --bad:#ff6b7a;
+    --grid:#2a415b; --line:#f4e285; --cyl:#69c8ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#07111f,#0a1728);color:var(--text);
+       font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  .app{max-width:1180px;margin:0 auto;padding:18px}
+  .top{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+  h1{font-size:clamp(1.25rem,2.8vw,2rem);margin:0 0 5px}
+  .sub{color:var(--muted);max-width:800px;line-height:1.45}
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;margin-top:14px}
+  .card{background:rgba(13,27,45,.92);border:1px solid #20354d;border-radius:16px;padding:14px}
+  .view{padding:0;overflow:hidden;position:relative;min-height:590px}
+  canvas{display:block;width:100%;height:590px;touch-action:none;cursor:grab}
+  canvas:active{cursor:grabbing}
+  .hint{position:absolute;left:14px;bottom:12px;background:rgba(3,10,18,.72);padding:8px 10px;
+        border-radius:10px;color:#bdd0e3;font-size:.82rem;pointer-events:none}
+  .badge{display:inline-flex;gap:7px;align-items:center;border:1px solid #28445f;border-radius:999px;
+         padding:7px 10px;color:#cfe1f3;font-size:.82rem;background:#0a1728}
+  .controls h2,.readout h2{font-size:1rem;margin:2px 0 10px}
+  .control{margin:13px 0}
+  label{display:flex;justify-content:space-between;gap:10px;font-size:.9rem}
+  .val{color:var(--accent);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:#54c8f0}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  button{width:100%;border:1px solid #31536f;background:#112a44;color:#ecf7ff;border-radius:10px;
+         min-height:42px;padding:8px 10px;font-weight:650;cursor:pointer}
+  button:hover{background:#173653}
+  .toggle{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:.9rem}
+  .toggle input{width:18px;height:18px;accent-color:#54c8f0}
+  .metric{padding:10px 11px;background:#0a1728;border:1px solid #213a53;border-radius:11px;margin:8px 0}
+  .metric .name{font-size:.78rem;color:var(--muted)}
+  .metric .num{font-size:1.12rem;font-weight:750;margin-top:2px}
+  .meter{height:8px;background:#152a40;border-radius:999px;overflow:hidden;margin-top:7px}
+  .meter>span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--good),var(--warn),var(--bad))}
+  .note{font-size:.82rem;color:#bfd0df;line-height:1.42;padding:10px;background:#0b1a2b;border-left:3px solid #5fd7ff;border-radius:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:.8rem;color:#c9d9e7}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+  .formula{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82rem;color:#d8e8f6;
+           background:#081522;border:1px solid #1e3850;padding:9px;border-radius:9px;margin-top:9px}
+  @media(max-width:850px){.layout{grid-template-columns:1fr}.view{min-height:500px}canvas{height:500px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <h1>Finite Charged Line + Gaussian Cylinder</h1>
+      <div class="sub">
+        Drag the 3D view to rotate it. The yellow line is a finite uniformly charged rod; the transparent blue cylinder is the Gaussian surface.
+        Arrows show the actual electric field of the finite line. Compare it with the ideal infinite-line approximation.
+      </div>
+    </div>
+    <div class="badge">↔ Drag to rotate · wheel to zoom</div>
+  </div>
+
+  <div class="layout">
+    <div class="card view">
+      <canvas id="cv" aria-label="Interactive 3D line charge and Gaussian cylinder"></canvas>
+      <div class="hint">Field arrows are normalized for visibility; direction is physical.</div>
+    </div>
+
+    <div class="card controls">
+      <h2>Geometry</h2>
+
+      <div class="control">
+        <label><span>Charged line length</span><span class="val" id="lineVal"></span></label>
+        <input id="lineLen" type="range" min="1.0" max="8.0" step="0.1" value="4.0">
+      </div>
+
+      <div class="control">
+        <label><span>Gaussian cylinder length</span><span class="val" id="cylVal"></span></label>
+        <input id="cylLen" type="range" min="0.8" max="6.0" step="0.1" value="3.0">
+      </div>
+
+      <div class="control">
+        <label><span>Cylinder radius</span><span class="val" id="radVal"></span></label>
+        <input id="radius" type="range" min="0.6" max="2.3" step="0.05" value="1.25">
+      </div>
+
+      <div class="row">
+        <button id="idealBtn" type="button">Ideal long line</button>
+        <button id="badBtn" type="button">Show end effects</button>
+      </div>
+
+      <label class="toggle"><input id="showIdeal" type="checkbox" checked> Show ideal radial directions</label>
+      <label class="toggle"><input id="showEnd" type="checkbox" checked> Show field on end caps</label>
+
+      <h2 style="margin-top:18px">How good is the approximation?</h2>
+
+      <div class="metric">
+        <div class="name">Maximum field tilt from cylinder normal</div>
+        <div class="num" id="tilt">—</div>
+        <div class="meter"><span id="tiltMeter"></span></div>
+      </div>
+
+      <div class="metric">
+        <div class="name">Radial-field error vs. infinite line</div>
+        <div class="num" id="err">—</div>
+        <div class="meter"><span id="errMeter"></span></div>
+      </div>
+
+      <div class="metric">
+        <div class="name">End-cap flux fraction</div>
+        <div class="num" id="capFlux">—</div>
+      </div>
+
+      <div class="note" id="assessment"></div>
+
+      <div class="formula">
+        Infinite line: E = λ/(2π ε₀ r)<br>
+        Finite line: field is computed by summing contributions along the charged segment.
+      </div>
+
+      <div class="legend">
+        <span><i class="dot" style="background:#f4e285"></i>charged line</span>
+        <span><i class="dot" style="background:#69c8ff"></i>Gaussian surface</span>
+        <span><i class="dot" style="background:#73e2a7"></i>actual E</span>
+        <span><i class="dot" style="background:#ff9f68"></i>ideal radial</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const lineLen = $('lineLen'), cylLen = $('cylLen'), radius = $('radius');
+  let yaw = -0.65, pitch = 0.35, zoom = 1.0;
+  let dragging=false, lastX=0,lastY=0;
+
+  function resize(){
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const r=cv.getBoundingClientRect();
+    cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  function rot(p){
+    let [x,y,z]=p;
+    let cy=Math.cos(yaw), sy=Math.sin(yaw);
+    let x1=cy*x+sy*z, z1=-sy*x+cy*z;
+    let cp=Math.cos(pitch), sp=Math.sin(pitch);
+    let y1=cp*y-sp*z1, z2=sp*y+cp*z1;
+    return [x1,y1,z2];
+  }
+  function proj(p){
+    const [x,y,z]=rot(p);
+    const w=cv.clientWidth,h=cv.clientHeight;
+    const s=76*zoom/(1+0.06*z);
+    return [w/2+x*s,h/2-y*s,z,s];
+  }
+
+  function line3(a,b,stroke,width=1,alpha=1,dash=[]){
+    const A=proj(a), B=proj(b);
+    ctx.save(); ctx.globalAlpha=alpha; ctx.strokeStyle=stroke; ctx.lineWidth=width; ctx.setLineDash(dash);
+    ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.restore();
+  }
+
+  function arrow3(a,vec,color,width=1.5,alpha=1){
+    const b=[a[0]+vec[0],a[1]+vec[1],a[2]+vec[2]];
+    const A=proj(a),B=proj(b);
+    const dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy);
+    if(L<2)return;
+    ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=width;
+    ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();
+    const ux=dx/L,uy=dy/L,hs=6;
+    ctx.beginPath();ctx.moveTo(B[0],B[1]);ctx.lineTo(B[0]-ux*hs-uy*hs*.55,B[1]-uy*hs+ux*hs*.55);
+    ctx.lineTo(B[0]-ux*hs+uy*hs*.55,B[1]-uy*hs-ux*hs*.55);ctx.closePath();ctx.fill();ctx.restore();
+  }
+
+  function finiteField(x,y,z,L){
+    // dimensionless field for uniform lambda/(4*pi*eps0)=1, numerical integral
+    const N=180, dz=L/N; let ex=0,ey=0,ez=0;
+    for(let i=0;i<N;i++){
+      const zp=-L/2+(i+.5)*dz;
+      const dx=x,dy=y,dzz=z-zp;
+      const r2=dx*dx+dy*dy+dzz*dzz, inv=1/Math.pow(r2,1.5);
+      ex+=dx*inv*dz; ey+=dy*inv*dz; ez+=dzz*inv*dz;
+    }
+    return [ex,ey,ez];
+  }
+  function mag(v){return Math.hypot(v[0],v[1],v[2])}
+  function norm(v){const m=mag(v)||1;return v.map(q=>q/m)}
+
+  function metrics(){
+    const L=+lineLen.value,C=+cylLen.value,R=+radius.value;
+    let maxTilt=0, maxErr=0, sideFlux=0, capFlux=0;
+    const nz=32,nphi=40;
+    const idealMag=2/R; // because chosen normalization gives infinite line integral = 2/r
+    for(let iz=0;iz<nz;iz++){
+      const z=-C/2+(iz+.5)*C/nz;
+      for(let ip=0;ip<nphi;ip++){
+        const ph=2*Math.PI*(ip+.5)/nphi, x=R*Math.cos(ph),y=R*Math.sin(ph);
+        const E=finiteField(x,y,z,L);
+        const Er=(E[0]*x+E[1]*y)/R;
+        const tilt=Math.atan2(Math.abs(E[2]),Math.abs(Er))*180/Math.PI;
+        maxTilt=Math.max(maxTilt,tilt);
+        maxErr=Math.max(maxErr,Math.abs(Er-idealMag)/idealMag*100);
+        sideFlux += Er*(R*(2*Math.PI/nphi)*(C/nz));
+      }
+    }
+    const nr=22;
+    for(const sgn of [-1,1]){
+      const z=sgn*C/2;
+      for(let ir=0;ir<nr;ir++){
+        const rr=R*Math.sqrt((ir+.5)/nr);
+        const ringArea=Math.PI*R*R/nr;
+        for(let ip=0;ip<24;ip++){
+          const ph=2*Math.PI*(ip+.5)/24;
+          const E=finiteField(rr*Math.cos(ph),rr*Math.sin(ph),z,L);
+          capFlux += (sgn*E[2])*(ringArea/24);
+        }
+      }
+    }
+    const totalAbs=Math.abs(sideFlux)+Math.abs(capFlux);
+    return {maxTilt,maxErr,capFrac: totalAbs?100*Math.abs(capFlux)/totalAbs:0};
+  }
+
+  function cylinderWire(R,C){
+    const N=64;
+    // rings
+    for(const z of [-C/2,C/2]){
+      let prev=null;
+      for(let i=0;i<=N;i++){
+        const ph=2*Math.PI*i/N,p=[R*Math.cos(ph),R*Math.sin(ph),z];
+        if(prev) line3(prev,p,'#69c8ff',1.25,.7);
+        prev=p;
+      }
+    }
+    // side generators
+    for(let i=0;i<12;i++){
+      const ph=2*Math.PI*i/12;
+      line3([R*Math.cos(ph),R*Math.sin(ph),-C/2],[R*Math.cos(ph),R*Math.sin(ph),C/2],'#69c8ff',1,.38);
+    }
+  }
+
+  function draw(){
+    const w=cv.clientWidth,h=cv.clientHeight;
+    ctx.clearRect(0,0,w,h);
+    const g=ctx.createRadialGradient(w*.48,h*.45,10,w*.5,h*.5,Math.max(w,h)*.7);
+    g.addColorStop(0,'#10243b');g.addColorStop(1,'#07111f');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+
+    const L=+lineLen.value,C=+cylLen.value,R=+radius.value;
+
+    // faint axes
+    line3([-3.1,0,0],[3.1,0,0],'#29445e',1,.4,[5,6]);
+    line3([0,-3.1,0],[0,3.1,0],'#29445e',1,.4,[5,6]);
+    line3([0,0,-4.6],[0,0,4.6],'#36526d',1,.5,[5,6]);
+
+    cylinderWire(R,C);
+
+    // line charge
+    line3([0,0,-L/2],[0,0,L/2],'#f4e285',7,1);
+    for(let z=-L/2+.18;z<L/2;z+=.38){
+      const P=proj([0,0,z]);
+      ctx.fillStyle='#fff4ad';ctx.beginPath();ctx.arc(P[0],P[1],2.4,0,Math.PI*2);ctx.fill();
+    }
+
+    // field on side
+    const zs=9, phis=12;
+    for(let iz=0;iz<zs;iz++){
+      const z=-C/2+(iz+.5)*C/zs;
+      for(let ip=0;ip<phis;ip++){
+        const ph=2*Math.PI*ip/phis,x=R*Math.cos(ph),y=R*Math.sin(ph);
+        const E=finiteField(x,y,z,L), n=norm(E);
+        const Er=(E[0]*x+E[1]*y)/R;
+        const tilt=Math.atan2(Math.abs(E[2]),Math.abs(Er))*180/Math.PI;
+        const t=Math.min(1,tilt/30);
+        const color=t<.45?'#73e2a7':t<.8?'#ffd166':'#ff6b7a';
+        arrow3([x,y,z],[n[0]*.52,n[1]*.52,n[2]*.52],color,1.3,.9);
+        if($('showIdeal').checked && iz%2===0 && ip%2===0){
+          arrow3([x,y,z],[Math.cos(ph)*.42,Math.sin(ph)*.42,0],'#ff9f68',1,.55);
+        }
+      }
+    }
+
+    // end caps
+    if($('showEnd').checked){
+      for(const sgn of [-1,1]){
+        const z=sgn*C/2;
+        for(let ir=1;ir<=2;ir++){
+          const rr=R*ir/3;
+          for(let ip=0;ip<10;ip++){
+            const ph=2*Math.PI*ip/10,x=rr*Math.cos(ph),y=rr*Math.sin(ph);
+            const E=finiteField(x,y,z,L),n=norm(E);
+            arrow3([x,y,z],[n[0]*.42,n[1]*.42,n[2]*.42],'#c5a3ff',1.15,.78);
+          }
+        }
+      }
+    }
+
+    // labels
+    const lp=proj([0,0,L/2+.25]);
+    ctx.fillStyle='#f8eaa0';ctx.font='600 13px system-ui';ctx.fillText('finite line charge',lp[0]+8,lp[1]);
+    const gp=proj([R,0,C/2]);
+    ctx.fillStyle='#8edcff';ctx.fillText('Gaussian cylinder',gp[0]+8,gp[1]-8);
+  }
+
+  function update(){
+    $('lineVal').textContent=(+lineLen.value).toFixed(1)+' m';
+    $('cylVal').textContent=(+cylLen.value).toFixed(1)+' m';
+    $('radVal').textContent=(+radius.value).toFixed(2)+' m';
+
+    const m=metrics();
+    $('tilt').textContent=m.maxTilt.toFixed(1)+'°';
+    $('err').textContent=m.maxErr.toFixed(1)+'%';
+    $('capFlux').textContent=m.capFrac.toFixed(1)+'%';
+    $('tiltMeter').style.width=Math.min(100,m.maxTilt/45*100)+'%';
+    $('errMeter').style.width=Math.min(100,m.maxErr)+'%';
+
+    const ratio=(+lineLen.value)/(+cylLen.value);
+    let text;
+    if(m.maxTilt<5 && m.maxErr<8){
+      text='Excellent infinite-line approximation: over this Gaussian surface, the field is almost radial and nearly uniform in magnitude at fixed radius.';
+    }else if(m.maxTilt<15 && m.maxErr<20){
+      text='Reasonable approximation, but end effects are now visible. Notice that the actual field arrows begin to tilt toward the ends of the finite charged line.';
+    }else{
+      text='The infinite-line approximation is poor here. The field is not everywhere perpendicular to the curved surface, its magnitude varies with z, and non-negligible flux passes through the end caps.';
+    }
+    if(ratio>1 && ratio<1.5){
+      text += ' The charged line is longer than the cylinder, but only slightly—being longer is not by itself enough to guarantee cylindrical symmetry.';
+    }else if(ratio>=2){
+      text += ' Because the charged line extends well beyond both ends of the Gaussian cylinder, the central region increasingly resembles an infinite line.';
+    }
+    $('assessment').textContent=text;
+    draw();
+  }
+
+  [lineLen,cylLen,radius,$('showIdeal'),$('showEnd')].forEach(el=>el.addEventListener('input',update));
+  $('idealBtn').addEventListener('click',()=>{lineLen.value=8;cylLen.value=2.4;radius.value=1.0;update()});
+  $('badBtn').addEventListener('click',()=>{lineLen.value=3.3;cylLen.value=3.0;radius.value=1.3;update()});
+
+  cv.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;cv.setPointerCapture(e.pointerId)});
+  cv.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    yaw+=(e.clientX-lastX)*.009; pitch+=(e.clientY-lastY)*.009;
+    pitch=Math.max(-1.35,Math.min(1.35,pitch));lastX=e.clientX;lastY=e.clientY;draw();
+  });
+  cv.addEventListener('pointerup',()=>dragging=false);
+  cv.addEventListener('pointercancel',()=>dragging=false);
+  cv.addEventListener('wheel',e=>{e.preventDefault();zoom*=Math.exp(-e.deltaY*.001);zoom=Math.max(.55,Math.min(1.75,zoom));draw()},{passive:false});
+  window.addEventListener('resize',resize);
+
+  resize(); update();
+})();
+</script>
+</body>
+</html>
