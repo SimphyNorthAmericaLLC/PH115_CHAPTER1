@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Newton's Dilemma with Charges</title>
+<style>
+:root{--bg:#07111f;--panel:#0d1b2d;--text:#eef6ff;--muted:#9db2c8;--wall:#69c8ff;--charge:#ffd166;--gauss:#ff9f68;--field:#73e2a7}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#07111f,#0a1728);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.app{max-width:1200px;margin:auto;padding:18px}h1{font-size:clamp(1.25rem,2.6vw,2rem);margin:0 0 6px}.sub{color:var(--muted);line-height:1.45;max-width:950px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:16px;margin-top:14px}.card{background:rgba(13,27,45,.94);border:1px solid #20354d;border-radius:16px;padding:14px}
+.view{padding:0;overflow:hidden;position:relative;min-height:620px}canvas{display:block;width:100%;height:620px;touch-action:none;cursor:grab}.hint{position:absolute;left:14px;bottom:12px;background:rgba(3,10,18,.76);padding:8px 10px;border-radius:10px;color:#bfd1e2;font-size:.82rem;pointer-events:none}
+.section{border-top:1px solid #20354d;margin-top:13px;padding-top:12px}.section:first-child{border-top:0;margin-top:0;padding-top:0}.section h2{font-size:.96rem;margin:0 0 8px}.control{margin:10px 0}
+label{display:flex;justify-content:space-between;gap:8px;font-size:.88rem}.val{color:#5fd7ff;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#54c8f0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}button{width:100%;min-height:42px;border:1px solid #31536f;background:#112a44;color:#ecf7ff;border-radius:10px;padding:8px 10px;font-weight:650;cursor:pointer}
+.metric{padding:9px 10px;background:#0a1728;border:1px solid #213a53;border-radius:11px;margin:7px 0}.metric .name{font-size:.76rem;color:var(--muted)}.metric .num{font-size:1.08rem;font-weight:750;margin-top:2px}
+.note{font-size:.82rem;color:#bfd0df;line-height:1.45;padding:10px;background:#0b1a2b;border-left:3px solid #5fd7ff;border-radius:8px}.formula{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;background:#081522;border:1px solid #1e3850;padding:9px;border-radius:9px;margin-top:9px;color:#d8e8f6}
+.status{font-size:.82rem;color:#c6d8e7;margin-top:8px}@media(max-width:880px){.layout{grid-template-columns:1fr}.view{min-height:520px}canvas{height:520px}}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>Newton's Dilemma — Recast with Electric Charge</h1>
+<div class="sub">Release many identical positive charges (1.0 nC each) inside a spherical cavity. They repel one another and settle onto the spherical boundary. Once the distribution becomes spherically symmetric, a concentric Gaussian surface lets us determine the electric field without summing every charge individually.</div>
+<div class="layout">
+<div class="card view"><canvas id="cv"></canvas><div class="hint">Drag to rotate · wheel to zoom · release the charges</div></div>
+<aside class="card">
+<div class="section"><h2>Charge experiment</h2>
+<div class="control"><label><span>Number of charges</span><span class="val" id="nOut">24</span></label><input id="n" type="range" min="8" max="60" step="1" value="24"></div>
+<div class="control"><label><span>Cavity radius</span><span class="val" id="Rout">2.50</span></label><input id="R" type="range" min="1.8" max="3.2" step="0.1" value="2.5"></div>
+<div class="row"><button id="reset">Randomize inside</button><button id="release">Release charges</button></div>
+<div class="row" style="margin-top:9px"><button id="pause">Pause</button><button id="equilibrium">Jump to steady state</button></div>
+<div class="status" id="status">Charges are initially scattered inside the cavity.</div></div>
+<div class="section"><h2>Gaussian surface</h2>
+<div class="control"><label><span>Gaussian radius r</span><span class="val" id="gOut">1.25</span></label><input id="gR" type="range" min="0.25" max="3.8" step="0.05" value="1.25"></div>
+<div class="control"><label><span>External probe distance rₚ</span><span class="val" id="pOut">3.25</span></label><input id="probeR" type="range" min="2.6" max="5.5" step="0.05" value="3.25"></div>
+<div class="metric"><div class="name">Enclosed charge</div><div class="num" id="qenc">0 C</div></div>
+<div class="metric"><div class="name">Gauss-law field magnitude</div><div class="num" id="Egauss">0</div></div>
+<div class="metric"><div class="name">Direct Coulomb sum at external probe</div><div class="num" id="Edirect">—</div></div>
+<div class="metric"><div class="name">Gauss-law prediction at external probe</div><div class="num" id="EprobeGauss">—</div></div><div class="metric"><div class="name">Surface-charge asymmetry indicator</div><div class="num" id="uniformity">—</div></div>
+<div class="note" id="message"></div>
+<div class="formula">∮ E · dA = Qenc/ε₀<br>spherical symmetry ⇒ E(4πr²) = Qenc/ε₀<br>E = Qenc/(4π ε₀ r²) &nbsp; [N/C]</div></div>
+</aside></div></div>
+<script>
+(() => {
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d'),nSl=$('n'),Rsl=$('R'),gSl=$('gR'),pSl=$('probeR');
+const kC=8.9875517923e9, qEach=1e-9; let yaw=-.7,pitch=.38,zoom=1,drag=false,lx=0,ly=0,charges=[],running=false,last=0,settled=false;
+function randSphere(radius){let x,y,z,s;do{x=Math.random()*2-1;y=Math.random()*2-1;z=Math.random()*2-1;s=x*x+y*y+z*z}while(s>1||s<.02);return[x*radius,y*radius,z*radius]}
+function initialize(){running=false;settled=false;charges=[];const N=+nSl.value,R=+Rsl.value;for(let i=0;i<N;i++)charges.push({p:randSphere(R*.68),v:[0,0,0]});$('status').textContent='Charges are initially scattered inside the cavity.';update();draw()}
+function equilibrium(){running=false;settled=true;charges=[];const N=+nSl.value,R=+Rsl.value*.965,golden=Math.PI*(3-Math.sqrt(5));for(let i=0;i<N;i++){const y=1-2*(i+.5)/N,rr=Math.sqrt(1-y*y),th=golden*i;charges.push({p:[R*rr*Math.cos(th),R*y,R*rr*Math.sin(th)],v:[0,0,0]})}$('status').textContent='Approximate steady state reached: charges are nearly uniform on the spherical boundary.';update();draw()}
+function rot([x,y,z]){const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),x1=cy*x+sy*z,z1=-sy*x+cy*z;return[x1,cp*y-sp*z1,sp*y+cp*z1]}
+function proj(p){const[x,y,z]=rot(p),w=cv.clientWidth,h=cv.clientHeight,s=72*zoom/(1+.05*z);return[w/2+x*s,h/2-y*s,z]}
+function seg(a,b,c,w=1,al=.7,dash=[]){const A=proj(a),B=proj(b);ctx.save();ctx.strokeStyle=c;ctx.lineWidth=w;ctx.globalAlpha=al;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.restore()}
+function circle(axis,val,R,color,al=.4){let prev=null;for(let i=0;i<=72;i++){const t=2*Math.PI*i/72;let p;if(axis==='x')p=[val,R*Math.cos(t),R*Math.sin(t)];if(axis==='y')p=[R*Math.cos(t),val,R*Math.sin(t)];if(axis==='z')p=[R*Math.cos(t),R*Math.sin(t),val];if(prev)seg(prev,p,color,1,al);prev=p}}
+function sphere(R){
+  const C=proj([0,0,0]),E=proj([R,0,0]),rr=Math.max(10,Math.hypot(E[0]-C[0],E[1]-C[1]));
+  const grad=ctx.createRadialGradient(C[0]-rr*.28,C[1]-rr*.28,rr*.08,C[0],C[1],rr);
+  grad.addColorStop(0,'rgba(135,220,255,.15)');
+  grad.addColorStop(.72,'rgba(70,175,225,.08)');
+  grad.addColorStop(1,'rgba(70,175,225,.035)');
+  ctx.save();
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(C[0],C[1],rr,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#89dcff';ctx.lineWidth=1.6;ctx.globalAlpha=.68;
+  ctx.beginPath();ctx.arc(C[0],C[1],rr,0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+}
+function directField(p){let ex=0,ey=0,ez=0;for(const c of charges){const dx=p[0]-c.p[0],dy=p[1]-c.p[1],dz=p[2]-c.p[2],r2=dx*dx+dy*dy+dz*dz+.018,inv=1/Math.pow(r2,1.5);ex+=dx*inv;ey+=dy*inv;ez+=dz*inv}return[ex*kC*qEach,ey*kC*qEach,ez*kC*qEach]}
+function asym(){if(!charges.length)return 0;let sx=0,sy=0,sz=0;for(const c of charges){const m=Math.hypot(...c.p)||1;sx+=c.p[0]/m;sy+=c.p[1]/m;sz+=c.p[2]/m}return Math.hypot(sx,sy,sz)/charges.length}
+function step(dt){const N=charges.length,R=+Rsl.value,F=Array.from({length:N},()=>[0,0,0]);for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){const dx=charges[i].p[0]-charges[j].p[0],dy=charges[i].p[1]-charges[j].p[1],dz=charges[i].p[2]-charges[j].p[2],r2=dx*dx+dy*dy+dz*dz+.04,inv=.28/Math.pow(r2,1.5),fx=dx*inv,fy=dy*inv,fz=dz*inv;F[i][0]+=fx;F[i][1]+=fy;F[i][2]+=fz;F[j][0]-=fx;F[j][1]-=fy;F[j][2]-=fz}
+let avg=0;for(let i=0;i<N;i++){const c=charges[i],r=Math.hypot(...c.p)||1;F[i][0]+=.36*c.p[0]/r;F[i][1]+=.36*c.p[1]/r;F[i][2]+=.36*c.p[2]/r;for(let k=0;k<3;k++){c.v[k]=(c.v[k]+F[i][k]*dt)*.95;c.p[k]+=c.v[k]*dt}let rn=Math.hypot(...c.p);if(rn>R*.97){const s=R*.97/rn;for(let k=0;k<3;k++)c.p[k]*=s;const nx=c.p[0]/(R*.97),ny=c.p[1]/(R*.97),nz=c.p[2]/(R*.97),vn=c.v[0]*nx+c.v[1]*ny+c.v[2]*nz;if(vn>0){c.v[0]-=vn*nx;c.v[1]-=vn*ny;c.v[2]-=vn*nz}c.v[0]*=.8;c.v[1]*=.8;c.v[2]*=.8}avg+=Math.hypot(...c.v)}if(avg/N<.005){running=false;settled=true;$('status').textContent='Steady state reached: charges are distributed around the spherical boundary.'}}
+function animate(t){if(!running)return;const dt=Math.min(.025,(t-last)/1000||.016);last=t;for(let i=0;i<2;i++)step(dt);update();draw();requestAnimationFrame(animate)}
+function update(){
+const R=+Rsl.value,g=+gSl.value,pR=Math.max(+pSl.value,R+.1);
+if(+pSl.value!==pR)pSl.value=pR.toFixed(2);
+pSl.min=(R+.1).toFixed(2);
+$('nOut').textContent=nSl.value;$('Rout').textContent=R.toFixed(2);$('gOut').textContent=g.toFixed(2);$('pOut').textContent=pR.toFixed(2);
+let qenc=0;for(const c of charges)if(Math.hypot(...c.p)<g)qenc++;
+$('qenc').textContent=(qenc*qEach).toExponential(3)+' C';
+$('Egauss').textContent=(qenc? kC*qenc*qEach/(g*g):0).toFixed(2)+' N/C';
+const E=directField([pR,0,0]);
+$('Edirect').textContent=Math.hypot(...E).toFixed(2)+' N/C';
+$('EprobeGauss').textContent=(kC*charges.length*qEach/(pR*pR)).toFixed(2)+' N/C';
+$('uniformity').textContent=(100*asym()).toFixed(1)+'%';
+if(!settled)$('message').textContent='Before equilibrium the charge distribution is not spherically symmetric. Gauss’s law is valid, but symmetry is insufficient to replace the integral by E·4πr².';
+else if(g<R*.94)$('message').textContent='The Gaussian sphere lies inside the charged shell and encloses no charge. With spherical symmetry, Gauss’s law gives E = 0 everywhere inside — the electrostatic analogue of Newton’s shell theorem.';
+else $('message').textContent='The Gaussian sphere encloses the shell charge. Once spherical symmetry is established, the field at any external point a distance r from the center follows E = Q/(4π ε₀ r²). Compare the direct Coulomb sum at the green probe with the Gauss-law prediction.'}
+function draw(){
+const w=cv.clientWidth,h=cv.clientHeight,R=+Rsl.value,g=+gSl.value,pR=Math.max(+pSl.value,R+.1);
+ctx.clearRect(0,0,w,h);
+const grd=ctx.createRadialGradient(w*.46,h*.44,20,w*.5,h*.5,Math.max(w,h)*.7);
+grd.addColorStop(0,'#10243b');grd.addColorStop(1,'#07111f');ctx.fillStyle=grd;ctx.fillRect(0,0,w,h);
+seg([-3.8,0,0],[3.8,0,0],'#29445e',1,.3,[5,6]);seg([0,-3.8,0],[0,3.8,0],'#29445e',1,.3,[5,6]);seg([0,0,-3.8],[0,0,3.8],'#29445e',1,.3,[5,6]);
+sphere(R);
+
+for(const c of charges){const P=proj(c.p);ctx.save();ctx.fillStyle='#ffd166';ctx.shadowColor='#ffd166';ctx.shadowBlur=7;ctx.beginPath();ctx.arc(P[0],P[1],5.2,0,Math.PI*2);ctx.fill();ctx.restore()}
+const probe=[pR,0,0],P=proj(probe),Ef=directField(probe),Em=Math.hypot(...Ef);
+ctx.fillStyle='#73e2a7';ctx.beginPath();ctx.arc(P[0],P[1],6,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#a9f4c3';ctx.font='600 12px system-ui';ctx.fillText('external probe',P[0]+10,P[1]-9);
+if(Em>1e-8){const u=Ef.map(v=>v/Em);const Q=[probe[0]+u[0]*.6,probe[1]+u[1]*.6,probe[2]+u[2]*.6],A=proj(probe),B=proj(Q);ctx.strokeStyle='#73e2a7';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();}
+}
+function resize(){const d=Math.min(2,devicePixelRatio||1),r=cv.getBoundingClientRect();cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);ctx.setTransform(d,0,0,d,0,0);draw()}
+$('reset').addEventListener('click',initialize);$('release').addEventListener('click',()=>{if(!running){running=true;settled=false;last=performance.now();$('status').textContent='Charges are moving and repelling one another…';requestAnimationFrame(animate)}});$('pause').addEventListener('click',()=>{running=false;$('status').textContent='Simulation paused.'});$('equilibrium').addEventListener('click',equilibrium);nSl.addEventListener('input',initialize);Rsl.addEventListener('input',initialize);gSl.addEventListener('input',()=>{update();draw()});pSl.addEventListener('input',()=>{update();draw()});
+cv.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId)});cv.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-lx)*.009;pitch=Math.max(-1.35,Math.min(1.35,pitch+(e.clientY-ly)*.009));lx=e.clientX;ly=e.clientY;draw()});cv.addEventListener('pointerup',()=>drag=false);cv.addEventListener('pointercancel',()=>drag=false);cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.55,Math.min(1.7,zoom*Math.exp(-e.deltaY*.001)));draw()},{passive:false});window.addEventListener('resize',resize);resize();initialize();
+})();
+</script>
+</body>
+</html>
